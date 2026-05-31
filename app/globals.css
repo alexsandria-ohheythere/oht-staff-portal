@@ -1,0 +1,11 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;900&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+:root {
+  --matcha:#7ab648;--matcha-light:#a8d672;--matcha-dark:#4a7a1e;--matcha-pale:#eef7e4;
+  --cream:#f5f0e8;--cream-dark:#e8e0d0;--espresso:#EF4576;--espresso-mid:#2d2010;
+  --gold:#d4a843;--gold-pale:#fef8ec;--blush:#e8845a;--sky:#4a90c4;--sky-pale:#e8f3fb;
+  --text-primary:#1a1208;--text-muted:#7a6a50;--border:#d8cebb;--surface:#faf7f2;--white:#ffffff;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--text-primary);min-height:100vh;}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-thumb{background:var(--cream-dark);border-radius:4px;}
