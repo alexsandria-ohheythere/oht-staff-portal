@@ -1,4 +1,6 @@
 'use client'
+export const dynamic = 'force-dynamic'
+
 import { useState, useEffect } from 'react'
 import PortalShell from '../../components/PortalShell'
 import { createClient } from '../../lib/supabase'
@@ -15,111 +17,111 @@ export default function StaffDashboard() {
   const [todayShifts, setTodayShifts]   = useState([])
   const [myTasks, setMyTasks]           = useState([])
   const [loading, setLoading]           = useState(true)
-  const [mounted, setMounted]           = useState(false)
 
-  useEffect(() => { setMounted(true) }, [])
-  useEffect(() => { if (mounted) fetchData() }, [mounted])
-
-  async function fetchData() {
-    try {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { setLoading(false); return }
-      const today = toISO(new Date())
-      const { data: staff } = await supabase.from('staff').select('*').eq('email', session.user.email).single()
-      if (!staff) { setLoading(false); return }
-      setStaffProfile(staff)
-      const [{ data: shifts }, { data: tasks }] = await Promise.all([
-        supabase.from('schedules').select('*').eq('staff_id', staff.id).eq('shift_date', today),
-        supabase.from('shift_task_assignments').select('*, role_tasks(task_name)').eq('staff_id', staff.id).eq('shift_date', today),
-      ])
-      setTodayShifts(shifts || [])
-      setMyTasks(tasks || [])
-    } catch(e) { console.error(e) }
-    setLoading(false)
-  }
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const supabase = createClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) { window.location.href = '/login'; return }
+        const today = toISO(new Date())
+        const { data: staff } = await supabase.from('staff').select('*').eq('email', session.user.email).single()
+        if (staff) {
+          setStaffProfile(staff)
+          const [{ data: shifts }, { data: tasks }] = await Promise.all([
+            supabase.from('schedules').select('*').eq('staff_id', staff.id).eq('shift_date', today),
+            supabase.from('shift_task_assignments').select('*, role_tasks(task_name)').eq('staff_id', staff.id).eq('shift_date', today),
+          ])
+          setTodayShifts(shifts || [])
+          setMyTasks(tasks || [])
+        }
+      } catch(e) { console.error(e) }
+      setLoading(false)
+    }
+    fetchData()
+  }, [])
 
   const completedTasks = myTasks.filter(t => t.completed).length
-  const todayDate = mounted ? new Date().toLocaleDateString('en-PH',{weekday:'long',month:'long',day:'numeric',year:'numeric'}) : ''
-  const greeting = mounted ? (new Date().getHours()<12?'morning':new Date().getHours()<18?'afternoon':'evening') : 'morning'
-
-  if (!mounted) return null
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'
 
   return (
     <PortalShell>
-      <div style={{background:'var(--white)',borderBottom:'1px solid var(--border)',padding:'0 24px',height:56,display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
+      <div style={{background:'white',borderBottom:'1px solid #d8cebb',padding:'0 24px',height:56,display:'flex',alignItems:'center',flexShrink:0}}>
         <div>
-          <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:17,fontWeight:700}}>
-            Good {greeting}{staffProfile?.nickname?`, ${staffProfile.nickname}`:''}! ☀️
+          <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:17,fontWeight:700,color:'#1a1208'}}>
+            Good {greeting}{staffProfile?.nickname ? `, ${staffProfile.nickname}` : ''}! ☀️
           </div>
-          <div style={{fontSize:11,color:'var(--text-muted)',marginTop:1}}>{todayDate}</div>
+          <div style={{fontSize:11,color:'#7a6a50',marginTop:1}}>
+            {new Date().toLocaleDateString('en-PH',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}
+          </div>
         </div>
       </div>
 
       <div style={{flex:1,overflowY:'auto',padding:'22px 24px'}}>
         {loading ? (
-          <div style={{textAlign:'center',padding:'40px',color:'var(--text-muted)'}}>Loading…</div>
+          <div style={{textAlign:'center',padding:'60px',color:'#7a6a50'}}>Loading your dashboard…</div>
         ) : (
           <>
             {/* Today's shift */}
             <div style={{marginBottom:16}}>
-              <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,marginBottom:10,textTransform:'uppercase',letterSpacing:1,color:'var(--text-muted)'}}>Today's Shift</div>
-              {todayShifts.length===0 ? (
-                <div style={{background:'var(--white)',border:'1px solid var(--border)',borderRadius:13,padding:'24px',textAlign:'center'}}>
+              <div style={{fontSize:10,fontWeight:700,letterSpacing:1.5,textTransform:'uppercase',color:'#7a6a50',marginBottom:10}}>Today's Shift</div>
+              {todayShifts.length === 0 ? (
+                <div style={{background:'white',border:'1px solid #d8cebb',borderRadius:13,padding:'24px',textAlign:'center'}}>
                   <div style={{fontSize:28,marginBottom:8}}>😴</div>
-                  <div style={{fontSize:13,fontWeight:600,color:'var(--text-muted)'}}>No shift scheduled today</div>
-                  <a href="/portal/schedule" style={{fontSize:11,color:'var(--matcha-dark)',textDecoration:'none',fontWeight:600,display:'block',marginTop:8}}>View your weekly schedule →</a>
+                  <div style={{fontSize:13,fontWeight:600,color:'#7a6a50'}}>No shift scheduled today</div>
+                  <a href="/portal/schedule" style={{fontSize:11,color:'#4a7a1e',textDecoration:'none',fontWeight:600,display:'block',marginTop:8}}>View your weekly schedule →</a>
                 </div>
-              ) : todayShifts.map(s=>{
-                const badge=SHIFT_BADGE[s.shift_type]
-                return(
-                  <div key={s.id} style={{background:'var(--white)',border:'1px solid var(--border)',borderRadius:13,padding:'18px 20px',borderLeft:`4px solid ${badge.color}`,display:'flex',alignItems:'center',gap:16,marginBottom:8}}>
+              ) : todayShifts.map(s => {
+                const badge = SHIFT_BADGE[s.shift_type]
+                return (
+                  <div key={s.id} style={{background:'white',border:'1px solid #d8cebb',borderRadius:13,padding:'18px 20px',borderLeft:`4px solid ${badge.color}`,display:'flex',alignItems:'center',gap:16,marginBottom:8}}>
                     <div style={{background:badge.bg,borderRadius:10,padding:'10px 14px',textAlign:'center'}}>
                       <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:18,fontWeight:700,color:badge.color}}>{badge.label}</div>
                       <div style={{fontSize:10,color:badge.color,opacity:.8}}>Shift</div>
                     </div>
                     <div>
                       <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:15,fontWeight:700}}>{badge.time}</div>
-                      <div style={{fontSize:11,color:'var(--text-muted)',marginTop:3}}>8 paid hours · 1 hr unpaid break</div>
+                      <div style={{fontSize:11,color:'#7a6a50',marginTop:3}}>8 paid hours · 1 hr unpaid break</div>
                     </div>
                   </div>
                 )
               })}
             </div>
 
-            {/* Task progress */}
-            {myTasks.length>0&&(
+            {/* Tasks */}
+            {myTasks.length > 0 && (
               <div style={{marginBottom:16}}>
-                <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,marginBottom:10,textTransform:'uppercase',letterSpacing:1,color:'var(--text-muted)'}}>Today's Tasks</div>
-                <div style={{background:'var(--white)',border:'1px solid var(--border)',borderRadius:13,padding:'18px 20px'}}>
+                <div style={{fontSize:10,fontWeight:700,letterSpacing:1.5,textTransform:'uppercase',color:'#7a6a50',marginBottom:10}}>Today's Tasks</div>
+                <div style={{background:'white',border:'1px solid #d8cebb',borderRadius:13,padding:'18px 20px'}}>
                   <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
                     <span style={{fontSize:13,fontWeight:600}}>{completedTasks} of {myTasks.length} completed</span>
-                    <span style={{fontSize:12,color:'var(--matcha-dark)',fontWeight:700}}>{Math.round((completedTasks/myTasks.length)*100)}%</span>
+                    <span style={{fontSize:12,color:'#4a7a1e',fontWeight:700}}>{Math.round((completedTasks/myTasks.length)*100)}%</span>
                   </div>
-                  <div style={{height:8,background:'var(--cream-dark)',borderRadius:4,overflow:'hidden',marginBottom:14}}>
-                    <div style={{height:'100%',width:`${Math.round((completedTasks/myTasks.length)*100)}%`,background:completedTasks===myTasks.length?'var(--matcha)':'var(--matcha-light)',borderRadius:4,transition:'width .4s'}}/>
+                  <div style={{height:8,background:'#e8e0d0',borderRadius:4,overflow:'hidden',marginBottom:12}}>
+                    <div style={{height:'100%',width:`${Math.round((completedTasks/myTasks.length)*100)}%`,background:'#7ab648',borderRadius:4}}/>
                   </div>
-                  <a href="/portal/tasks" style={{fontSize:11,color:'var(--matcha-dark)',textDecoration:'none',fontWeight:600}}>View all tasks →</a>
+                  <a href="/portal/tasks" style={{fontSize:11,color:'#4a7a1e',textDecoration:'none',fontWeight:600}}>View all tasks →</a>
                 </div>
               </div>
             )}
 
             {/* Quick links */}
-            <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:11,fontWeight:700,marginBottom:10,textTransform:'uppercase',letterSpacing:1,color:'var(--text-muted)'}}>Quick Access</div>
+            <div style={{fontSize:10,fontWeight:700,letterSpacing:1.5,textTransform:'uppercase',color:'#7a6a50',marginBottom:10}}>Quick Access</div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
               {[
-                {href:'/portal/schedule',icon:'📅',label:'My Schedule', desc:'View your weekly shifts',    color:'var(--matcha)'},
-                {href:'/portal/tasks',   icon:'✅',label:'My Tasks',    desc:"Check off today's tasks",   color:'var(--sky)'},
-                {href:'/portal/payslip', icon:'💸',label:'My Payslip', desc:'View your latest payslip',  color:'var(--gold)'},
-                {href:'/portal/leave',   icon:'🗓️',label:'Request Leave',desc:'Submit unavailability',   color:'#8e44ad'},
-              ].map(item=>(
+                { href:'/portal/schedule', icon:'📅', label:'My Schedule',  desc:'View your weekly shifts',   color:'#7ab648' },
+                { href:'/portal/tasks',    icon:'✅', label:'My Tasks',     desc:"Check off today's tasks",  color:'#4a90c4' },
+                { href:'/portal/payslip',  icon:'💸', label:'My Payslip',  desc:'View your latest payslip', color:'#d4a843' },
+                { href:'/portal/leave',    icon:'🗓️', label:'Request Leave',desc:'Submit unavailability',    color:'#8e44ad' },
+              ].map(item => (
                 <a key={item.href} href={item.href} style={{textDecoration:'none'}}>
-                  <div style={{background:'var(--white)',border:'1px solid var(--border)',borderRadius:13,padding:'16px',cursor:'pointer',transition:'all .2s',borderTop:`3px solid ${item.color}`}}
+                  <div style={{background:'white',border:'1px solid #d8cebb',borderRadius:13,padding:'16px',borderTop:`3px solid ${item.color}`,transition:'all .2s'}}
                     onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='0 6px 18px rgba(26,18,8,.08)'}}
                     onMouseLeave={e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow=''}}>
                     <div style={{fontSize:24,marginBottom:8}}>{item.icon}</div>
                     <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:13,fontWeight:700,marginBottom:4}}>{item.label}</div>
-                    <div style={{fontSize:11,color:'var(--text-muted)'}}>{item.desc}</div>
+                    <div style={{fontSize:11,color:'#7a6a50'}}>{item.desc}</div>
                   </div>
                 </a>
               ))}
