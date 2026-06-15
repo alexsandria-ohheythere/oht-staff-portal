@@ -166,7 +166,6 @@ export default function MyContracts() {
         ? `<img src="${mgmtSig.signature_data}" style="max-height:60px;max-width:200px;"/>`
         : `<span style="font-family:cursive;font-size:28px;">${mgmtSig.signature_data}</span>`
       : '<div style="border-bottom:1px solid #1a1208;min-height:60px;"></div>'
-    const today=new Date().toLocaleDateString('en-PH',{month:'long',day:'numeric',year:'numeric'})
     const today = new Date().toLocaleDateString('en-PH',{month:'long',day:'numeric',year:'numeric'})
     const staffName = staffMember ? `${staffMember.first_name} ${staffMember.last_name}` : 'Employee'
     const printWindow = window.open('','_blank')
