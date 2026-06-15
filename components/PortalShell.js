@@ -9,6 +9,7 @@ export default function PortalShell({ children }) {
   const [role, setRole]          = useState('')
   const [checked, setChecked]    = useState(false)
   const [unreadCount, setUnread] = useState(0)
+  const [pendingContracts, setPending] = useState(0)
 
   useEffect(() => {
     const supabase = createClient()
@@ -19,8 +20,12 @@ export default function PortalShell({ children }) {
         if (data) {
           setName(data.nickname || data.first_name || session.user.email.split('@')[0])
           setRole(data.role || '')
-          const { count } = await supabase.from('notifications').select('*', { count:'exact', head:true }).eq('staff_id', data.id).eq('is_read', false)
-          setUnread(count || 0)
+          const [{ count: notifCount }, { count: contractCount }] = await Promise.all([
+            supabase.from('notifications').select('*', { count:'exact', head:true }).eq('staff_id', data.id).eq('is_read', false),
+            supabase.from('contracts').select('*', { count:'exact', head:true }).eq('staff_id', data.id).eq('status', 'pending_signature'),
+          ])
+          setUnread(notifCount || 0)
+          setPending(contractCount || 0)
         } else {
           setName(session.user.email.split('@')[0])
         }
@@ -40,6 +45,8 @@ export default function PortalShell({ children }) {
     { href:'/portal/schedule',          icon:'📅', label:'My Schedule'    },
     { href:'/portal/tasks',             icon:'✔️', label:'Daily Check-In' },
     { href:'/portal/joborders',         icon:'📋', label:'Job Orders'     },
+    { href:'/portal/contracts',         icon:'📄', label:'My Contracts',  badge: pendingContracts },
+    { href:'/portal/files',             icon:'📁', label:'My Files · 201' },
     { href:'/portal/payslip',           icon:'💸', label:'My Payslip'     },
     { href:'/portal/leave',             icon:'🗓️', label:'Request Leave'  },
     { href:'/portal/notifications',     icon:'🔔', label:'Notifications', badge: unreadCount },
@@ -60,7 +67,7 @@ export default function PortalShell({ children }) {
           </div>
         )}
 
-        <nav style={{ flex:1, padding:'8px 0' }}>
+        <nav style={{ flex:1, padding:'8px 0', overflowY:'auto' }}>
           {NAV.map(link => {
             const active = pathname === link.href
             return (
