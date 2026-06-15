@@ -37,7 +37,7 @@ export default function StaffLogin() {
     <div style={{ minHeight:'100vh', background:'#EF4576', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
       <div style={{ background:'white', borderRadius:20, padding:'40px 36px', width:'100%', maxWidth:400, boxShadow:'0 32px 80px rgba(0,0,0,.3)' }}>
         <div style={{ textAlign:'center', marginBottom:32 }}>
-          <div style={{ width:60, height:60, borderRadius:'50%', background:'linear-gradient(135deg,#7ab648,#4a7a1e)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 14px', fontSize:26 }}>🌿</div>
+          <img src="/OHT_Logo.png" alt="Oh Hey There" style={{ width:120, height:'auto', margin:'0 auto 14px', display:'block' }} />
           <div style={{ fontFamily:"'Montserrat',sans-serif", fontSize:22, fontWeight:900, color:'#EF4576' }}>Oh Hey There</div>
           <div style={{ fontSize:11, color:'#7a6a50', letterSpacing:2, textTransform:'uppercase', marginTop:4 }}>
             {mode === 'login' ? 'Staff Portal' : 'Reset Password'}
