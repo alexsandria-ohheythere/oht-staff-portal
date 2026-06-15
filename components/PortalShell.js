@@ -5,9 +5,9 @@ import { createClient } from '../lib/supabase'
 
 export default function PortalShell({ children }) {
   const pathname = usePathname()
-  const [name, setName]         = useState('')
-  const [role, setRole]         = useState('')
-  const [checked, setChecked]   = useState(false)
+  const [name, setName]          = useState('')
+  const [role, setRole]          = useState('')
+  const [checked, setChecked]    = useState(false)
   const [unreadCount, setUnread] = useState(0)
 
   useEffect(() => {
@@ -24,9 +24,7 @@ export default function PortalShell({ children }) {
         } else {
           setName(session.user.email.split('@')[0])
         }
-      } catch(e) {
-        setName(session.user.email.split('@')[0])
-      }
+      } catch(e) { setName(session.user.email.split('@')[0]) }
       setChecked(true)
     })
   }, [])
@@ -38,12 +36,13 @@ export default function PortalShell({ children }) {
   }
 
   const NAV = [
-    { href:'/portal',               icon:'🏠', label:'My Dashboard'  },
-    { href:'/portal/schedule',      icon:'📅', label:'My Schedule'   },
-    { href:'/portal/tasks',         icon:'✅', label:'My Tasks'      },
-    { href:'/portal/payslip',       icon:'💸', label:'My Payslip'    },
-    { href:'/portal/leave',         icon:'🗓️', label:'Request Leave' },
-    { href:'/portal/notifications', icon:'🔔', label:'Notifications', badge: unreadCount },
+    { href:'/portal',                   icon:'🏠', label:'My Dashboard'   },
+    { href:'/portal/schedule',          icon:'📅', label:'My Schedule'    },
+    { href:'/portal/tasks',             icon:'✔️', label:'Daily Check-In' },
+    { href:'/portal/joborders',         icon:'📋', label:'Job Orders'     },
+    { href:'/portal/payslip',           icon:'💸', label:'My Payslip'     },
+    { href:'/portal/leave',             icon:'🗓️', label:'Request Leave'  },
+    { href:'/portal/notifications',     icon:'🔔', label:'Notifications', badge: unreadCount },
   ]
 
   return (
@@ -65,7 +64,10 @@ export default function PortalShell({ children }) {
           {NAV.map(link => {
             const active = pathname === link.href
             return (
-              <a key={link.href} href={link.href} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 18px', fontSize:12, fontWeight:active?700:500, color:active?'white':'rgba(255,255,255,.65)', borderLeft:`3px solid ${active?'white':'transparent'}`, background:active?'rgba(255,255,255,.15)':'transparent', textDecoration:'none', transition:'all .15s' }}>
+              <a key={link.href} href={link.href}
+                style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 18px', fontSize:12, fontWeight:active?700:400, color:'white', opacity:active?1:0.8, borderLeft:`3px solid ${active?'white':'transparent'}`, background:active?'rgba(0,0,0,.18)':'transparent', textDecoration:'none', transition:'all .15s' }}
+                onMouseEnter={e=>{ if(!active){e.currentTarget.style.opacity='1';e.currentTarget.style.background='rgba(0,0,0,.1)'} }}
+                onMouseLeave={e=>{ if(!active){e.currentTarget.style.opacity='0.8';e.currentTarget.style.background='transparent'} }}>
                 <span style={{ fontSize:14 }}>{link.icon}</span>
                 <span style={{ flex:1 }}>{link.label}</span>
                 {link.badge > 0 && (
@@ -79,7 +81,9 @@ export default function PortalShell({ children }) {
         </nav>
 
         <div style={{ padding:12, borderTop:'1px solid rgba(255,255,255,.15)' }}>
-          <button onClick={signOut} style={{ width:'100%', background:'rgba(255,255,255,.15)', border:'1px solid rgba(255,255,255,.25)', color:'white', padding:8, borderRadius:8, fontSize:11, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", fontWeight:600 }}>Sign Out</button>
+          <button onClick={signOut} style={{ width:'100%', background:'rgba(0,0,0,.15)', border:'1px solid rgba(255,255,255,.2)', color:'white', padding:8, borderRadius:8, fontSize:11, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", fontWeight:500 }}>
+            Sign Out
+          </button>
         </div>
       </div>
 
