@@ -167,35 +167,81 @@ export default function MyContracts() {
         : `<span style="font-family:cursive;font-size:28px;">${mgmtSig.signature_data}</span>`
       : '<div style="border-bottom:1px solid #1a1208;min-height:60px;"></div>'
     const today=new Date().toLocaleDateString('en-PH',{month:'long',day:'numeric',year:'numeric'})
-    const w=window.open('','_blank')
-    w.document.write(`<!DOCTYPE html><html><head><title>${selected.title}</title>
-    <style>body{font-family:'Helvetica Neue',sans-serif;font-size:13px;line-height:1.9;color:#1a1208;margin:0;padding:48px 56px;}
-    .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:20px;border-bottom:3px solid #EF4576;}
-    .brand{font-size:20px;font-weight:900;color:#EF4576;margin-bottom:4px;}
-    .logo{background:#EF4576;border-radius:10px;padding:10px 16px;text-align:right;}
-    .logo-t{font-size:13px;font-weight:900;color:white;letter-spacing:1px;}
-    .logo-s{font-size:9px;color:rgba(255,255,255,.8);letter-spacing:2px;text-transform:uppercase;}
-    .sig-grid{display:grid;grid-template-columns:1fr 1fr;gap:48px;margin-top:48px;padding-top:24px;border-top:1px solid #d8cebb;}
-    .sig-label{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#7a6a50;margin-bottom:12px;}
-    .sig-name{font-size:11px;font-weight:600;border-top:1px solid #1a1208;padding-top:6px;margin-top:8px;}
-    .sig-role{font-size:10px;color:#7a6a50;}
-    @media print{body{padding:32px 40px;}}</style></head><body>
-    <div class="header">
-      <div><div class="brand">OHT Cafe</div><div style="font-size:11px;color:#7a6a50;">Unit A 156 A. Aguirre Ave.<br/>Barangay BF Homes, Parañaque City</div></div>
-      <div class="logo"><div class="logo-t">OH HEY THERE</div><div class="logo-s">MATCHA CAFE</div></div>
-    </div>
-    <div style="text-align:center;font-size:18px;font-weight:700;margin-bottom:6px;">${selected.title}</div>
-    <div style="text-align:center;font-size:12px;color:#7a6a50;margin-bottom:28px;">${today}</div>
-    ${staff?`<div style="margin-bottom:20px;"><strong>${staff.first_name} ${staff.last_name}</strong><br/><span style="color:#7a6a50;font-size:12px;">${staff.role}</span></div>`:''}
-    <p>Dear ${staff?.first_name||'Employee'},</p>
-    <p>We are pleased to inform you of your <strong>${selected.employment_type||'full-time'}</strong> engagement with OHT Cafe.</p>
-    ${selected.content_html}
-    <div class="sig-grid">
-      <div><div class="sig-label">Employee</div>${empSigHtml}<div class="sig-name">${staff?`${staff.first_name} ${staff.last_name}`:'Employee'}</div><div class="sig-role">Signature Over Printed Name</div>${empSig?`<div style="font-size:9px;color:#7a6a50;margin-top:4px;font-family:monospace;">${fmtDT(empSig.signed_at)}</div>`:''}</div>
-      <div><div class="sig-label">Noted By</div>${mgmtSigHtml}<div class="sig-name">${mgmtSig?(mgmtSig.audit_trail?.[0]?.signer==='alex'?'Agnes Alexsandria S. Lalog':'CJ'):'Agnes Alexsandria S. Lalog'}</div><div class="sig-role">Managing Director & Co-founder</div>${mgmtSig?`<div style="font-size:9px;color:#7a6a50;margin-top:4px;font-family:monospace;">${fmtDT(mgmtSig.signed_at)}</div>`:''}</div>
-    </div>
-    <script>window.onload=()=>window.print();</script></body></html>`)
-    w.document.close()
+    const today = new Date().toLocaleDateString('en-PH',{month:'long',day:'numeric',year:'numeric'})
+    const staffName = staffMember ? `${staffMember.first_name} ${staffMember.last_name}` : 'Employee'
+    const printWindow = window.open('','_blank')
+    printWindow.document.write(`
+      <!DOCTYPE html><html><head>
+      <title>${selected.title}</title>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&family=DM+Sans:wght@400;600&display=swap');
+        *{margin:0;padding:0;box-sizing:border-box;}
+        body{font-family:'DM Sans',Helvetica,sans-serif;font-size:13px;line-height:1.9;color:#1a1208;padding:56px 72px;max-width:900px;margin:0 auto;}
+        .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:48px;}
+        .brand{font-family:'Montserrat',sans-serif;font-size:16px;font-weight:900;color:#EF4576;margin-bottom:6px;}
+        .addr{font-size:12px;line-height:1.8;}
+        .logo{height:90px;width:auto;object-fit:contain;}
+        .title{text-align:center;font-family:'Montserrat',sans-serif;font-size:16px;font-weight:700;letter-spacing:.5px;line-height:1.5;margin-bottom:40px;margin-top:8px;}
+        .date{margin-bottom:24px;font-size:13px;}
+        .emp-block{margin-bottom:24px;}
+        .emp-name{font-weight:700;font-size:13px;}
+        .salutation{margin-bottom:20px;}
+        .opening{margin-bottom:32px;line-height:1.9;}
+        .content{margin-bottom:40px;line-height:1.9;}
+        .content ul{margin:6px 0 6px 24px;} .content li{margin:3px 0;}
+        .content ol{margin:6px 0 6px 24px;}
+        .content h1,.content h2,.content h3{font-family:'Montserrat',sans-serif;margin:16px 0 8px;}
+        .content strong{font-weight:700;}
+        .sig-section{margin-top:56px;}
+        .sig-notice{margin-bottom:32px;line-height:1.8;}
+        .sig-grid{display:grid;grid-template-columns:1fr 1fr;gap:60px;margin-top:40px;}
+        .sig-box{}
+        .sig-noted{font-size:11px;color:#7a6a50;margin-bottom:8px;}
+        .sig-line{min-height:70px;border-bottom:1px solid #1a1208;margin-bottom:4px;display:flex;align-items:flex-end;padding-bottom:4px;}
+        .sig-name-line{border-top:1px solid #1a1208;padding-top:6px;margin-bottom:2px;font-size:12px;font-weight:600;}
+        .sig-role{font-size:11px;color:#7a6a50;}
+        .sig-date-line{min-height:28px;border-bottom:1px solid #1a1208;margin:20px 0 4px;}
+        .sig-ts{font-size:9px;color:#7a6a50;margin-top:6px;font-family:monospace;}
+        @media print{body{padding:40px 56px;}}
+      </style>
+      </head><body>
+      <div class="header">
+        <div>
+          <div class="brand">\${(selected.variables?.company_name||'OH HEY THERE Corp.')}</div>
+          <div class="addr">\${selected.variables?.address_line1||'Unit A 156 A. Aguirre Ave.'}<br/>\${selected.variables?.address_line2||'Barangay BF Homes'}<br/>\${selected.variables?.address_line3||'Parañaque City'}</div>
+        </div>
+        <img class="logo" src="\${selected.variables?.logo_url?.startsWith('data:')?selected.variables.logo_url:window.location.origin+(selected.variables?.logo_url||'/oht-logo.png')}" alt="Company Logo"/>
+      </div>
+      <div class="title">\${(selected.title||'EMPLOYMENT CONTRACT').toUpperCase()}</div>
+      <div class="date">${today}</div>
+      ${staffMember ? `<div class="emp-block"><div class="emp-name">${staffName}</div><div>${staffMember.role}</div></div>` : ''}
+      <div class="salutation">Dear ${staffName};</div>
+      <div class="opening">We are pleased to inform that you will be in <strong>${selected.employment_type||'full-time'}</strong> engagement with OHT Cafe, with the position of <strong>${staffMember?.role||''}</strong> on the terms set out below:</div>
+      <div class="content">${selected.content_html}</div>
+      <div class="sig-section">
+        <div class="sig-notice">If you acknowledge that you have read and fully understood this CONTRACT and that you willingly and voluntarily assent and consent to the terms and conditions thereof. With full knowledge of your rights under the law, please sign on the space provided below.</div>
+        <div class="sig-grid">
+          <div class="sig-box">
+            <div class="sig-line">${empSigHtml}</div>
+            <div class="sig-name-line">${staffName}</div>
+            <div class="sig-role">Signature Over Printed Name</div>
+            <div class="sig-date-line"></div>
+            <div class="sig-role">Date</div>
+            ${empSig ? `<div class="sig-ts">${fmtDT(empSig.signed_at)}</div>` : ''}
+          </div>
+          <div class="sig-box">
+            <div class="sig-noted">Noted by:</div>
+            <div class="sig-line">${mgmtSigHtml}</div>
+            <div class="sig-name-line">${mgmtSig ? (mgmtSig.audit_trail?.[0]?.signer==='alex' ? 'Agnes Alexsandria S. Lalog' : 'CJ') : 'Agnes Alexsandria S. Lalog'}</div>
+            <div class="sig-role">Managing Director & Co-founder</div>
+            ${mgmtSig ? `<div class="sig-ts">${fmtDT(mgmtSig.signed_at)}</div>` : ''}
+          </div>
+        </div>
+      </div>
+      <script>window.onload=()=>{setTimeout(()=>window.print(),500);}<\/script>
+      </body></html>
+    `)
+    printWindow.document.close()
   }
 
   const pendingCount = contracts.filter(c=>c.status==='pending_signature'&&!c.employee_signed_at).length
@@ -309,28 +355,25 @@ export default function MyContracts() {
           <div style={{display:'grid',gridTemplateColumns:'1fr 260px',gap:16}}>
             {/* Contract content */}
             <div style={{background:'white',border:'1px solid #d8cebb',borderRadius:13,overflow:'hidden'}}>
-              {/* Contract header */}
-              <div style={{padding:'32px 40px',borderBottom:'1px solid #d8cebb'}}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:24,paddingBottom:20,borderBottom:'2px solid #EF4576'}}>
+              {/* Contract header — reference layout */}
+              <div style={{padding:'48px 56px',borderBottom:'1px solid #d8cebb'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:48}}>
                   <div>
-                    <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:18,fontWeight:900,color:'#EF4576',marginBottom:3}}>OHT Cafe</div>
-                    <div style={{fontSize:11,color:'#7a6a50',lineHeight:1.6}}>Unit A 156 A. Aguirre Ave.<br/>Barangay BF Homes, Parañaque City</div>
+                    <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:16,fontWeight:900,color:'#EF4576',marginBottom:6}}>{selected.variables?.company_name||'OH HEY THERE Corp.'}</div>
+                    <div style={{fontSize:12,color:'#1a1208',lineHeight:1.8}}>{selected.variables?.address_line1||'Unit A 156 A. Aguirre Ave.'}<br/>{selected.variables?.address_line2||'Barangay BF Homes'}<br/>{selected.variables?.address_line3||'Parañaque City'}</div>
                   </div>
-                  <div style={{background:'#EF4576',borderRadius:9,padding:'9px 14px',textAlign:'right'}}>
-                    <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:12,fontWeight:900,color:'white',letterSpacing:1}}>OH HEY THERE</div>
-                    <div style={{fontSize:8,color:'rgba(255,255,255,.8)',letterSpacing:2,textTransform:'uppercase',marginTop:2}}>MATCHA CAFE</div>
-                  </div>
+                  <img src={selected.variables?.logo_url||"/oht-logo.png"} alt="Company Logo" style={{height:80,width:'auto',objectFit:'contain',maxWidth:160}}/>
                 </div>
-                <div style={{textAlign:'center',marginBottom:20}}>
-                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:17,fontWeight:700,marginBottom:4}}>{selected.title}</div>
-                  <div style={{fontSize:11,color:'#7a6a50'}}>{fmtDate(selected.created_at)}</div>
+                <div style={{textAlign:'center',marginBottom:40}}>
+                  <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:15,fontWeight:700,lineHeight:1.5,letterSpacing:.5}}>{(selected.title||'').toUpperCase()}</div>
                 </div>
-                {staff&&<div style={{marginBottom:14}}>
+                <div style={{marginBottom:24,fontSize:13}}>{fmtDate(selected.created_at)}</div>
+                {staff&&<div style={{marginBottom:24}}>
                   <div style={{fontWeight:700,fontSize:13}}>{staff.first_name} {staff.last_name}</div>
-                  <div style={{fontSize:11,color:'#7a6a50'}}>{staff.role}</div>
+                  <div style={{fontSize:12,color:'#1a1208'}}>{staff.role}</div>
                 </div>}
-                <p style={{fontSize:13,marginBottom:8}}>Dear {staff?.first_name||'Employee'},</p>
-                <p style={{fontSize:13,color:'#7a6a50'}}>We are pleased to inform you of your <strong>{selected.employment_type||'full-time'}</strong> engagement with OHT Cafe on the terms set out below:</p>
+                <div style={{marginBottom:20,fontSize:13}}>Dear {staff?.first_name} {staff?.last_name};</div>
+                <div style={{marginBottom:0,fontSize:13,lineHeight:1.9}}>We are pleased to inform that you will be in <strong>{selected.employment_type||'full-time'}</strong> engagement with OHT Cafe, with the position of <strong>{staff?.role||''}</strong> on the terms set out below:</div>
               </div>
               {/* Content */}
               <div style={{padding:'24px 40px',fontSize:13,lineHeight:1.9,color:'#1a1208'}} dangerouslySetInnerHTML={{__html:selected.content_html}}/>
