@@ -5,104 +5,246 @@ import PortalShell from '../../../components/PortalShell'
 import { createClient } from '../../../lib/supabase'
 
 const toISO = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-const fmtTime = ts => ts?new Date(ts).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}):''
-const SHIFT_COLORS = { am:{color:'#4a7a1e',bg:'#eef7e4',border:'#7ab648'}, mid:{color:'#a06000',bg:'#fef3e2',border:'#d4a843'}, pm:{color:'#2d5a8a',bg:'#e8f0fb',border:'#4a90c4'} }
+const fmtTime = ts => ts ? new Date(ts).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}) : ''
+
+const SHIFT_STYLES = {
+  am:  { label:'AM Shift',  time:'6:30AM – 3:30PM',  color:'#4a7a1e', bg:'#eef7e4', border:'#7ab648', emoji:'🌅' },
+  mid: { label:'Mid Shift', time:'11:00AM – 8:00PM', color:'#a06000', bg:'#fef3e2', border:'#d4a843', emoji:'☀️'  },
+  pm:  { label:'PM Shift',  time:'3:00PM – 11:00PM', color:'#2d5a8a', bg:'#e8f0fb', border:'#4a90c4', emoji:'🌙' },
+}
+
+function ScoreRing({ pct, color, size=64 }) {
+  const r = (size - 8) / 2
+  const circ = 2 * Math.PI * r
+  const offset = circ - (pct / 100) * circ
+  return (
+    <svg width={size} height={size} style={{ transform:'rotate(-90deg)', flexShrink:0 }}>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#f0ede8" strokeWidth={6}/>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={pct===100?'#7ab648':color} strokeWidth={6}
+        strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
+        style={{ transition:'stroke-dashoffset .5s ease' }}/>
+      <text x={size/2} y={size/2} textAnchor="middle" dominantBaseline="middle"
+        style={{ fontSize: size > 60 ? 14 : 11, fontWeight:700, fill: pct===100?'#4a7a1e':color, fontFamily:"'Montserrat',sans-serif", transform:`rotate(90deg)`, transformOrigin:`${size/2}px ${size/2}px` }}>
+        {pct}%
+      </text>
+    </svg>
+  )
+}
 
 export default function MyTasks() {
-  const [staffId, setStaffId] = useState(null)
+  const [staff, setStaff]     = useState(null)
   const [tasks, setTasks]     = useState([])
+  const [shifts, setShifts]   = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(null)
   const today = toISO(new Date())
+  const todayLabel = new Date().toLocaleDateString('en-PH',{weekday:'long',month:'long',day:'numeric',year:'numeric'})
 
-  useEffect(()=>{ getStaff() },[])
-  useEffect(()=>{ if(staffId) fetchTasks() },[staffId])
+  useEffect(() => { init() }, [])
 
-  async function getStaff() {
-    const supabase=createClient()
-    const {data:{session}}=await supabase.auth.getSession(); if(!session) return
-    const {data}=await supabase.from('staff').select('id').eq('email',session.user.email).single()
-    if(data) setStaffId(data.id)
-  }
-
-  async function fetchTasks() {
-    setLoading(true)
-    const supabase=createClient()
-    const {data}=await supabase.from('shift_task_assignments').select('*, role_tasks(task_name)').eq('staff_id',staffId).eq('shift_date',today).order('completed')
-    setTasks(data||[]); setLoading(false)
+  async function init() {
+    try {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+      const { data: s } = await supabase.from('staff').select('*').eq('email', session.user.email).single()
+      if (!s) { setLoading(false); return }
+      setStaff(s)
+      const [{ data: t }, { data: sh }] = await Promise.all([
+        supabase.from('shift_task_assignments').select('*, role_tasks(task_name)').eq('staff_id', s.id).eq('shift_date', today).order('created_at'),
+        supabase.from('schedules').select('*').eq('staff_id', s.id).eq('shift_date', today),
+      ])
+      setTasks(t || [])
+      setShifts(sh || [])
+    } catch(e) { console.error(e) }
+    setLoading(false)
   }
 
   async function toggleTask(id, completed) {
     setSaving(id)
-    const supabase=createClient()
-    const {data}=await supabase.from('shift_task_assignments').update({completed,completed_at:completed?new Date().toISOString():null}).eq('id',id).select().single()
-    if(data) setTasks(prev=>prev.map(t=>t.id===id?data:t))
+    const supabase = createClient()
+    const completed_at = completed ? new Date().toISOString() : null
+    const { data } = await supabase.from('shift_task_assignments').update({ completed, completed_at }).eq('id', id).select().single()
+    if (data) setTasks(prev => prev.map(t => t.id === id ? data : t))
     setSaving(null)
   }
 
-  const done = tasks.filter(t=>t.completed).length
-  const pct  = tasks.length>0?Math.round((done/tasks.length)*100):0
+  async function completeAllShift(shiftId) {
+    const pending = tasks.filter(t => t.shift_type === shiftId && !t.completed)
+    if (!pending.length) return
+    const supabase = createClient()
+    const now = new Date().toISOString()
+    await Promise.all(pending.map(t => supabase.from('shift_task_assignments').update({ completed:true, completed_at:now }).eq('id', t.id)))
+    setTasks(prev => prev.map(t => t.shift_type === shiftId && !t.completed ? { ...t, completed:true, completed_at:now } : t))
+  }
 
-  // Group by shift
+  // Score calculations per shift
   const byShift = {}
-  tasks.forEach(t=>{ if(!byShift[t.shift_type]) byShift[t.shift_type]=[]; byShift[t.shift_type].push(t) })
+  tasks.forEach(t => {
+    const sh = t.shift_type || 'am'
+    if (!byShift[sh]) byShift[sh] = []
+    byShift[sh].push(t)
+  })
+
+  const shiftScores = Object.entries(byShift).map(([shiftId, shiftTasks]) => {
+    const total = shiftTasks.length
+    const done  = shiftTasks.filter(t => t.completed).length
+    const pct   = total > 0 ? Math.round((done / total) * 100) : 0
+    return { shiftId, total, done, pct, tasks: shiftTasks }
+  })
+
+  const totalTasks = tasks.length
+  const totalDone  = tasks.filter(t => t.completed).length
+  const overallPct = totalTasks > 0 ? Math.round((totalDone / totalTasks) * 100) : 0
+  const allDone    = totalTasks > 0 && totalDone === totalTasks
 
   return (
     <PortalShell>
-      <div style={{background:'var(--white)',borderBottom:'1px solid var(--border)',padding:'0 24px',height:56,display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
-        <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:17,fontWeight:700}}>My Tasks Today</div>
-        {tasks.length>0&&<div style={{fontFamily:"'DM Mono',monospace",fontSize:12,color:'var(--matcha-dark)',fontWeight:700}}>{done}/{tasks.length} done</div>}
+      <div style={{ background:'white', borderBottom:'1px solid #d8cebb', padding:'0 24px', height:56, display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+        <div>
+          <div style={{ fontFamily:"'Montserrat',sans-serif", fontSize:17, fontWeight:700 }}>Daily Check-In</div>
+          <div style={{ fontSize:11, color:'#7a6a50', marginTop:1 }}>{todayLabel}</div>
+        </div>
+        {totalTasks > 0 && !allDone && (
+          <button onClick={() => Object.keys(byShift).forEach(sid => completeAllShift(sid))}
+            style={{ background:'#7ab648', color:'white', border:'none', borderRadius:9, padding:'8px 16px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            ✓ Complete All
+          </button>
+        )}
       </div>
-      <div style={{flex:1,overflowY:'auto',padding:'22px 24px'}}>
-        {loading?<div style={{textAlign:'center',padding:'40px',color:'var(--text-muted)'}}>Loading…</div>:tasks.length===0?(
-          <div style={{textAlign:'center',padding:'60px',background:'var(--white)',border:'1px solid var(--border)',borderRadius:13}}>
-            <div style={{fontSize:40,marginBottom:12}}>✅</div>
-            <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:15,fontWeight:700,marginBottom:6}}>No tasks for today</div>
-            <div style={{fontSize:12,color:'var(--text-muted)'}}>Your manager will assign tasks when your shift starts</div>
+
+      <div style={{ flex:1, overflowY:'auto', padding:'20px 24px' }}>
+        {loading ? (
+          <div style={{ textAlign:'center', padding:'60px', color:'#7a6a50' }}>Loading…</div>
+
+        ) : shifts.length === 0 ? (
+          <div style={{ textAlign:'center', padding:'60px', background:'white', border:'1px solid #d8cebb', borderRadius:13 }}>
+            <div style={{ fontSize:40, marginBottom:12 }}>😴</div>
+            <div style={{ fontFamily:"'Montserrat',sans-serif", fontSize:15, fontWeight:700, marginBottom:6 }}>No shift today</div>
+            <div style={{ fontSize:12, color:'#7a6a50' }}>Enjoy your rest! ☕</div>
           </div>
-        ):(
+
+        ) : totalTasks === 0 ? (
+          <div style={{ textAlign:'center', padding:'60px', background:'white', border:'1px solid #d8cebb', borderRadius:13 }}>
+            <div style={{ fontSize:40, marginBottom:12 }}>📋</div>
+            <div style={{ fontFamily:"'Montserrat',sans-serif", fontSize:15, fontWeight:700, marginBottom:6 }}>No tasks assigned yet</div>
+            <div style={{ fontSize:12, color:'#7a6a50' }}>Your manager will assign tasks for today's shift.</div>
+          </div>
+
+        ) : (
           <>
-            {/* Progress */}
-            <div style={{background:'var(--white)',border:'1px solid var(--border)',borderRadius:13,padding:'16px 20px',marginBottom:16}}>
-              <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
-                <span style={{fontSize:13,fontWeight:600}}>Today's Progress</span>
-                <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:18,fontWeight:700,color:pct===100?'var(--matcha-dark)':'var(--espresso)'}}>{pct}%</span>
+            {/* ── SCORE TRACKER ── */}
+            <div style={{ background:'white', border:'1px solid #d8cebb', borderRadius:14, padding:'18px 20px', marginBottom:16 }}>
+              <div style={{ fontSize:10, fontWeight:700, letterSpacing:1.5, textTransform:'uppercase', color:'#7a6a50', marginBottom:14 }}>
+                Shift Task Score Tracker
               </div>
-              <div style={{height:8,background:'var(--cream-dark)',borderRadius:4,overflow:'hidden'}}>
-                <div style={{height:'100%',width:`${pct}%`,background:pct===100?'var(--matcha)':'var(--matcha-light)',borderRadius:4,transition:'width .4s'}}/>
+              <div style={{ display:'flex', alignItems:'center', gap:20, flexWrap:'wrap' }}>
+
+                {/* Overall score ring */}
+                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, minWidth:80 }}>
+                  <ScoreRing pct={overallPct} color='#EF4576' size={72}/>
+                  <div style={{ fontSize:10, fontWeight:700, color:'#7a6a50', textAlign:'center' }}>Overall</div>
+                  <div style={{ fontSize:9, color:'#7a6a50' }}>{totalDone}/{totalTasks} tasks</div>
+                </div>
+
+                <div style={{ width:1, height:70, background:'#f0ede8', flexShrink:0 }}/>
+
+                {/* Per-shift scores */}
+                <div style={{ display:'flex', gap:16, flex:1, flexWrap:'wrap' }}>
+                  {shiftScores.map(({ shiftId, total, done, pct }) => {
+                    const ss = SHIFT_STYLES[shiftId] || SHIFT_STYLES.am
+                    return (
+                      <div key={shiftId} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, minWidth:70 }}>
+                        <ScoreRing pct={pct} color={ss.color} size={60}/>
+                        <div style={{ textAlign:'center' }}>
+                          <div style={{ fontSize:10, fontWeight:700, color:ss.color }}>{ss.emoji} {ss.label.split(' ')[0]}</div>
+                          <div style={{ fontSize:9, color:'#7a6a50' }}>{done}/{total}</div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
-              {pct===100&&<div style={{fontSize:12,color:'var(--matcha-dark)',fontWeight:700,textAlign:'center',marginTop:10}}>🎉 All tasks complete! Great work!</div>}
+
+              {/* Progress bar */}
+              <div style={{ marginTop:16 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, marginBottom:5 }}>
+                  <span style={{ color:'#7a6a50' }}>Daily Progress</span>
+                  <span style={{ fontWeight:700, color: allDone?'#4a7a1e':'#EF4576' }}>{overallPct}%</span>
+                </div>
+                <div style={{ height:8, background:'#f0ede8', borderRadius:6, overflow:'hidden' }}>
+                  <div style={{ height:'100%', width:`${overallPct}%`, background: allDone?'#7ab648':'#EF4576', borderRadius:6, transition:'width .5s ease' }}/>
+                </div>
+              </div>
             </div>
 
-            {/* Tasks by shift */}
-            {Object.entries(byShift).map(([shiftId, shiftTasks])=>{
-              const sc = SHIFT_COLORS[shiftId]||SHIFT_COLORS.am
-              return(
-                <div key={shiftId} style={{background:'var(--white)',border:'1px solid var(--border)',borderRadius:13,overflow:'hidden',marginBottom:12}}>
-                  <div style={{background:sc.bg,padding:'10px 16px',borderBottom:`1px solid ${sc.border}33`,fontSize:11,fontWeight:700,color:sc.color,textTransform:'uppercase',letterSpacing:1}}>
-                    {shiftId==='am'?'AM Shift':shiftId==='mid'?'Mid Shift':'PM Shift'}
+            {/* ── TASKS BY SHIFT ── */}
+            {shiftScores.map(({ shiftId, pct, tasks: shiftTasks }) => {
+              const ss = SHIFT_STYLES[shiftId] || SHIFT_STYLES.am
+              const shiftDone = shiftTasks.filter(t => t.completed).length
+              const shiftComplete = shiftDone === shiftTasks.length
+
+              return (
+                <div key={shiftId} style={{ background:'white', border:`1px solid ${shiftComplete?'#7ab648':'#d8cebb'}`, borderRadius:13, overflow:'hidden', marginBottom:12, transition:'border-color .3s' }}>
+                  {/* Shift header */}
+                  <div style={{ background: shiftComplete?'#eef7e4':ss.bg, padding:'12px 18px', borderBottom:`1px solid ${shiftComplete?'#7ab64844':ss.border+'44'}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                      <span style={{ fontSize:18 }}>{ss.emoji}</span>
+                      <div>
+                        <div style={{ fontSize:12, fontWeight:700, color: shiftComplete?'#4a7a1e':ss.color }}>{ss.label}</div>
+                        <div style={{ fontSize:10, color: shiftComplete?'#4a7a1e':ss.color, opacity:.7 }}>{ss.time}</div>
+                      </div>
+                    </div>
+                    <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                      {/* Shift score badge */}
+                      <div style={{ background: shiftComplete?'#7ab648':ss.color, color:'white', borderRadius:20, padding:'4px 12px', fontSize:12, fontWeight:700 }}>
+                        {pct}%
+                      </div>
+                      {!shiftComplete && (
+                        <button onClick={() => completeAllShift(shiftId)}
+                          style={{ background:'transparent', border:`1px solid ${ss.border}`, color:ss.color, borderRadius:7, padding:'4px 10px', fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                          Complete All
+                        </button>
+                      )}
+                      {shiftComplete && <span style={{ fontSize:16 }}>✅</span>}
+                    </div>
                   </div>
-                  {shiftTasks.map(t=>(
-                    <div key={t.id} style={{display:'flex',alignItems:'center',gap:12,padding:'14px 16px',borderBottom:'1px solid var(--cream-dark)',background:t.completed?'#f8fdf5':'var(--white)',transition:'background .2s'}}>
-                      <button onClick={()=>toggleTask(t.id,!t.completed)} disabled={saving===t.id}
-                        style={{width:26,height:26,borderRadius:'50%',border:`2px solid ${t.completed?'var(--matcha)':sc.border}`,background:t.completed?'var(--matcha)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .2s',flexShrink:0}}>
-                        {t.completed&&<span style={{color:'white',fontSize:13,fontWeight:700}}>✓</span>}
-                      </button>
-                      <div style={{flex:1}}>
-                        <div style={{fontSize:13,fontWeight:500,color:t.completed?'var(--text-muted)':'var(--espresso)',textDecoration:t.completed?'line-through':'none'}}>
-                          {t.role_tasks?.task_name||'Task'}
+
+                  {/* Tasks */}
+                  {shiftTasks.map((t, idx) => (
+                    <div key={t.id}
+                      onClick={() => saving !== t.id && toggleTask(t.id, !t.completed)}
+                      style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: idx < shiftTasks.length-1 ? '1px solid #f0ede8' : 'none', background: t.completed?'#f8fdf5':'white', cursor:'pointer', transition:'background .15s', userSelect:'none' }}
+                      onMouseEnter={e=>{ if(!t.completed) e.currentTarget.style.background='#fafafa' }}
+                      onMouseLeave={e=>{ e.currentTarget.style.background = t.completed?'#f8fdf5':'white' }}>
+                      <div style={{ width:26, height:26, borderRadius:'50%', border:`2.5px solid ${t.completed?'#7ab648':ss.border}`, background:t.completed?'#7ab648':'transparent', display:'flex', alignItems:'center', justifyContent:'center', transition:'all .2s', flexShrink:0, opacity:saving===t.id?.5:1 }}>
+                        {t.completed && <span style={{ color:'white', fontSize:13, fontWeight:700 }}>✓</span>}
+                      </div>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:13, fontWeight:t.completed?400:600, color:t.completed?'#7a6a50':'#1a1208', textDecoration:t.completed?'line-through':'none', transition:'all .2s' }}>
+                          {t.role_tasks?.task_name || 'Task'}
                         </div>
-                        {t.completed&&t.completed_at&&(
-                          <div style={{fontSize:10,color:'var(--matcha-dark)',marginTop:2,fontFamily:"'DM Mono',monospace"}}>
-                            ✓ Completed at {fmtTime(t.completed_at)}
+                        {t.completed && t.completed_at && (
+                          <div style={{ fontSize:10, color:'#4a7a1e', marginTop:2, fontFamily:"'DM Mono',monospace", fontWeight:600 }}>
+                            ✓ Done at {fmtTime(t.completed_at)}
                           </div>
                         )}
                       </div>
+                      {!t.completed && <div style={{ fontSize:10, color:'#d8cebb' }}>tap</div>}
                     </div>
                   ))}
                 </div>
               )
             })}
+
+            {/* All done */}
+            {allDone && (
+              <div style={{ background:'#eef7e4', border:'2px solid #7ab648', borderRadius:13, padding:'22px', textAlign:'center' }}>
+                <div style={{ fontSize:40, marginBottom:8 }}>🎉</div>
+                <div style={{ fontFamily:"'Montserrat',sans-serif", fontSize:16, fontWeight:700, color:'#4a7a1e', marginBottom:4 }}>100% Complete!</div>
+                <div style={{ fontSize:12, color:'#7a6a50' }}>Amazing work today, {staff?.nickname || staff?.first_name}! ☕🌿</div>
+              </div>
+            )}
           </>
         )}
       </div>
