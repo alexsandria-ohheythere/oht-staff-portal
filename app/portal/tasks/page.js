@@ -92,7 +92,7 @@ export default function MyTasks() {
       const [{ data: t, error: tErr }, { data: sh, error: shErr }] = await Promise.all([
         supabase
           .from('shift_task_assignments')
-          .select('*, role_tasks(task_name)')
+          .select('*, role_tasks!shift_task_assignments_task_id_fkey(task_name)')
           .eq('staff_id', staffId)
           .eq('shift_date', today)
           .order('created_at'),
