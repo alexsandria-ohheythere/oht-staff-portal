@@ -9,6 +9,7 @@ const fmtTime = ts => ts ? new Date(ts).toLocaleTimeString('en-PH',{hour:'2-digi
 
 const SHIFT_STYLES = {
   am:  { label:'AM Shift',  time:'6:30AM – 3:30PM',  color:'#4a7a1e', bg:'#eef7e4', border:'#7ab648', emoji:'🌅' },
+  ops: { label:'OPS Shift', time:'8:00AM – 5:00PM',  color:'#7a3a8a', bg:'#f5eeff', border:'#b06af5', emoji:'🏢' },
   mid: { label:'Mid Shift', time:'11:00AM – 8:00PM', color:'#a06000', bg:'#fef3e2', border:'#d4a843', emoji:'☀️'  },
   pm:  { label:'PM Shift',  time:'3:00PM – 11:00PM', color:'#2d5a8a', bg:'#e8f0fb', border:'#4a90c4', emoji:'🌙' },
 }
@@ -78,7 +79,6 @@ export default function MyTasks() {
     setTasks(prev => prev.map(t => t.shift_type === shiftId && !t.completed ? { ...t, completed:true, completed_at:now } : t))
   }
 
-  // Score calculations per shift
   const byShift = {}
   tasks.forEach(t => {
     const sh = t.shift_type || 'am'
@@ -133,23 +133,18 @@ export default function MyTasks() {
 
         ) : (
           <>
-            {/* ── SCORE TRACKER ── */}
+            {/* SCORE TRACKER */}
             <div style={{ background:'white', border:'1px solid #d8cebb', borderRadius:14, padding:'18px 20px', marginBottom:16 }}>
               <div style={{ fontSize:10, fontWeight:700, letterSpacing:1.5, textTransform:'uppercase', color:'#7a6a50', marginBottom:14 }}>
                 Shift Task Score Tracker
               </div>
               <div style={{ display:'flex', alignItems:'center', gap:20, flexWrap:'wrap' }}>
-
-                {/* Overall score ring */}
                 <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, minWidth:80 }}>
                   <ScoreRing pct={overallPct} color='#EF4576' size={72}/>
                   <div style={{ fontSize:10, fontWeight:700, color:'#7a6a50', textAlign:'center' }}>Overall</div>
                   <div style={{ fontSize:9, color:'#7a6a50' }}>{totalDone}/{totalTasks} tasks</div>
                 </div>
-
                 <div style={{ width:1, height:70, background:'#f0ede8', flexShrink:0 }}/>
-
-                {/* Per-shift scores */}
                 <div style={{ display:'flex', gap:16, flex:1, flexWrap:'wrap' }}>
                   {shiftScores.map(({ shiftId, total, done, pct }) => {
                     const ss = SHIFT_STYLES[shiftId] || SHIFT_STYLES.am
@@ -165,8 +160,6 @@ export default function MyTasks() {
                   })}
                 </div>
               </div>
-
-              {/* Progress bar */}
               <div style={{ marginTop:16 }}>
                 <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, marginBottom:5 }}>
                   <span style={{ color:'#7a6a50' }}>Daily Progress</span>
@@ -178,7 +171,7 @@ export default function MyTasks() {
               </div>
             </div>
 
-            {/* ── TASKS BY SHIFT ── */}
+            {/* TASKS BY SHIFT */}
             {shiftScores.map(({ shiftId, pct, tasks: shiftTasks }) => {
               const ss = SHIFT_STYLES[shiftId] || SHIFT_STYLES.am
               const shiftDone = shiftTasks.filter(t => t.completed).length
@@ -186,7 +179,6 @@ export default function MyTasks() {
 
               return (
                 <div key={shiftId} style={{ background:'white', border:`1px solid ${shiftComplete?'#7ab648':'#d8cebb'}`, borderRadius:13, overflow:'hidden', marginBottom:12, transition:'border-color .3s' }}>
-                  {/* Shift header */}
                   <div style={{ background: shiftComplete?'#eef7e4':ss.bg, padding:'12px 18px', borderBottom:`1px solid ${shiftComplete?'#7ab64844':ss.border+'44'}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                       <span style={{ fontSize:18 }}>{ss.emoji}</span>
@@ -196,7 +188,6 @@ export default function MyTasks() {
                       </div>
                     </div>
                     <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                      {/* Shift score badge */}
                       <div style={{ background: shiftComplete?'#7ab648':ss.color, color:'white', borderRadius:20, padding:'4px 12px', fontSize:12, fontWeight:700 }}>
                         {pct}%
                       </div>
@@ -210,7 +201,6 @@ export default function MyTasks() {
                     </div>
                   </div>
 
-                  {/* Tasks */}
                   {shiftTasks.map((t, idx) => (
                     <div key={t.id}
                       onClick={() => saving !== t.id && toggleTask(t.id, !t.completed)}
@@ -237,7 +227,6 @@ export default function MyTasks() {
               )
             })}
 
-            {/* All done */}
             {allDone && (
               <div style={{ background:'#eef7e4', border:'2px solid #7ab648', borderRadius:13, padding:'22px', textAlign:'center' }}>
                 <div style={{ fontSize:40, marginBottom:8 }}>🎉</div>
