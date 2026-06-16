@@ -7,7 +7,7 @@ import { createClient } from '../../../../lib/supabase'
 import { getCatalog, createRequest } from '../../../../lib/inventory'
 
 const CATEGORIES = ['Dairy','Coffee','Packaging','Cleaning','Food','Beverage','Equipment','Other']
-const UNITS      = ['pcs','kg','g','bottle','sleeve','pack','roll','box','bag']
+const UNITS      = ['pcs','kg','g','bottle','sleeve','pack','roll','box','bag','liter','ml']
 
 const iStyle = {
   width:'100%', background:'white', border:'1px solid #d8cebb',
@@ -27,21 +27,21 @@ const blankLine = () => ({
 })
 
 const URGENCY_OPTIONS = [
-  { value:'low',    label:'Can wait — next run',     color:'#7a6a50', bg:'#f0ede8' },
-  { value:'normal', label:'Normal',                  color:'#2d5a8a', bg:'#e8f0fb' },
-  { value:'high',   label:'Urgent — needed today',   color:'#c0392b', bg:'#fdeaea' },
+  { value:'low',    label:'Not urgent — restock when possible', color:'#7a6a50', bg:'#f0ede8' },
+  { value:'normal', label:'Normal — needed soon',               color:'#2d5a8a', bg:'#e8f0fb' },
+  { value:'high',   label:'Urgent — running out now',           color:'#c0392b', bg:'#fdeaea' },
 ]
 
-export default function NewRequestPage() {
+export default function NewStockRequestPage() {
   const router = useRouter()
-  const [staffId, setStaffId]     = useState(null)
-  const [catalog, setCatalog]     = useState([])
-  const [title, setTitle]         = useState('')
-  const [urgency, setUrgency]     = useState('normal')
-  const [notes, setNotes]         = useState('')
-  const [lines, setLines]         = useState([blankLine()])
+  const [staffId, setStaffId]       = useState(null)
+  const [catalog, setCatalog]       = useState([])
+  const [title, setTitle]           = useState('')
+  const [urgency, setUrgency]       = useState('normal')
+  const [notes, setNotes]           = useState('')
+  const [lines, setLines]           = useState([blankLine()])
   const [submitting, setSubmitting] = useState(false)
-  const [toast, setToast]         = useState(null)
+  const [toast, setToast]           = useState(null)
 
   function showToast(icon, msg) {
     setToast({ icon, msg })
@@ -52,11 +52,7 @@ export default function NewRequestPage() {
     const sb = createClient()
     sb.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) return
-      const { data: staff } = await sb
-        .from('staff')
-        .select('id')
-        .eq('email', session.user.email)
-        .single()
+      const { data: staff } = await sb.from('staff').select('id').eq('email', session.user.email).single()
       if (staff) setStaffId(staff.id)
     })
     getCatalog().then(setCatalog).catch(console.error)
@@ -81,7 +77,7 @@ export default function NewRequestPage() {
 
   const handleSubmit = async () => {
     if (!staffId)                                             return showToast('⚠️', 'Not signed in')
-    if (!title.trim())                                        return showToast('⚠️', 'Please add a title')
+    if (!title.trim())                                        return showToast('⚠️', 'Add a title')
     if (lines.some(l => !l.item_name.trim() || !l.quantity)) return showToast('⚠️', 'Fill in all item names and quantities')
 
     setSubmitting(true)
@@ -100,7 +96,7 @@ export default function NewRequestPage() {
         })),
       }
       const req = await createRequest(staffId, payload)
-      showToast('✅', `${req.pr_number} submitted!`)
+      showToast('✅', `${req.pr_number} flagged — supervisor notified`)
       setTimeout(() => router.push('/inventory/my-requests'), 1500)
     } catch (e) {
       showToast('❌', e.message ?? 'Something went wrong')
@@ -111,28 +107,26 @@ export default function NewRequestPage() {
 
   return (
     <PortalShell>
-      {/* Top bar */}
-      <div style={{ background:'white', borderBottom:'1px solid #d8cebb', padding:'0 24px', height:56, display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <button onClick={() => router.back()}
-            style={{ background:'transparent', border:'none', cursor:'pointer', fontSize:18, color:'#7a6a50', padding:'0 4px' }}>
-            ←
-          </button>
-          <div style={{ fontFamily:"'Montserrat',sans-serif", fontSize:17, fontWeight:700, color:'#1a1208' }}>New Purchase Request</div>
-        </div>
+      <div style={{ background:'white', borderBottom:'1px solid #d8cebb', padding:'0 24px', height:56, display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
+        <button onClick={() => router.back()}
+          style={{ background:'transparent', border:'none', cursor:'pointer', fontSize:18, color:'#7a6a50', padding:'0 4px' }}>←</button>
+        <div style={{ fontFamily:"'Montserrat',sans-serif", fontSize:17, fontWeight:700, color:'#1a1208' }}>Flag Running Low</div>
       </div>
 
-      {/* Content */}
       <div style={{ flex:1, overflowY:'auto', padding:'22px 24px' }}>
 
-        {/* Details card */}
+        <div style={{ background:'#fef3e2', border:'1px solid #fcd34d', borderRadius:12, padding:'12px 16px', marginBottom:16, fontSize:12, color:'#92400e' }}>
+          🔔 Your supervisor will review this and forward to the CEO for approval before purchasing.
+        </div>
+
+        {/* Details */}
         <div style={{ background:'white', border:'1px solid #d8cebb', borderRadius:13, padding:20, marginBottom:16 }}>
-          <div style={{ fontFamily:"'Montserrat',sans-serif", fontSize:13, fontWeight:700, color:'#1a1208', marginBottom:16 }}>Details</div>
+          <div style={{ fontFamily:"'Montserrat',sans-serif", fontSize:13, fontWeight:700, color:'#1a1208', marginBottom:16 }}>What's running low?</div>
 
           <div style={{ marginBottom:14 }}>
-            <label style={{ display:'block', fontSize:9, fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', color:'#7a6a50', marginBottom:5 }}>What do you need?</label>
+            <label style={{ display:'block', fontSize:9, fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', color:'#7a6a50', marginBottom:5 }}>Title / summary *</label>
             <input type="text" value={title} onChange={e => setTitle(e.target.value)}
-              placeholder="e.g. Dairy restock for Tuesday service"
+              placeholder="e.g. Dairy restock needed for weekend"
               style={iStyle} />
           </div>
 
@@ -150,16 +144,16 @@ export default function NewRequestPage() {
           </div>
 
           <div>
-            <label style={{ display:'block', fontSize:9, fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', color:'#7a6a50', marginBottom:5 }}>Notes for ops support (optional)</label>
+            <label style={{ display:'block', fontSize:9, fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', color:'#7a6a50', marginBottom:5 }}>Additional notes (optional)</label>
             <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
-              placeholder="Brand preferences, avoid substitutes…"
+              placeholder="Any context your supervisor should know…"
               style={{ ...iStyle, resize:'vertical', minHeight:60, lineHeight:1.5 }} />
           </div>
         </div>
 
-        {/* Line items card */}
+        {/* Items */}
         <div style={{ background:'white', border:'1px solid #d8cebb', borderRadius:13, padding:20, marginBottom:16 }}>
-          <div style={{ fontFamily:"'Montserrat',sans-serif", fontSize:13, fontWeight:700, color:'#1a1208', marginBottom:16 }}>Items Needed</div>
+          <div style={{ fontFamily:"'Montserrat',sans-serif", fontSize:13, fontWeight:700, color:'#1a1208', marginBottom:16 }}>Items Running Low</div>
 
           <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
             {lines.map((line, idx) => (
@@ -172,7 +166,6 @@ export default function NewRequestPage() {
                   )}
                 </div>
 
-                {/* Catalog picker */}
                 <div style={{ marginBottom:10 }}>
                   <label style={{ display:'block', fontSize:9, fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', color:'#7a6a50', marginBottom:5 }}>Pick from catalog (optional)</label>
                   <select value={line.catalog_item_id} onChange={e => pickCatalogItem(line._key, e.target.value)} style={iStyle}>
@@ -189,15 +182,14 @@ export default function NewRequestPage() {
                   </select>
                 </div>
 
-                {/* Name + qty + unit */}
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 80px 80px', gap:8, marginBottom:10 }}>
                   <div>
-                    <label style={{ display:'block', fontSize:9, fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', color:'#7a6a50', marginBottom:5 }}>Item name</label>
+                    <label style={{ display:'block', fontSize:9, fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', color:'#7a6a50', marginBottom:5 }}>Item name *</label>
                     <input type="text" value={line.item_name} onChange={e => updateLine(line._key, 'item_name', e.target.value)}
                       placeholder="Name" style={iStyle} />
                   </div>
                   <div>
-                    <label style={{ display:'block', fontSize:9, fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', color:'#7a6a50', marginBottom:5 }}>Qty</label>
+                    <label style={{ display:'block', fontSize:9, fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', color:'#7a6a50', marginBottom:5 }}>Qty needed *</label>
                     <input type="number" min="1" value={line.quantity} onChange={e => updateLine(line._key, 'quantity', e.target.value)}
                       placeholder="0" style={iStyle} />
                   </div>
@@ -209,11 +201,10 @@ export default function NewRequestPage() {
                   </div>
                 </div>
 
-                {/* Brand notes */}
                 <div>
-                  <label style={{ display:'block', fontSize:9, fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', color:'#7a6a50', marginBottom:5 }}>Brand / notes (optional)</label>
+                  <label style={{ display:'block', fontSize:9, fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', color:'#7a6a50', marginBottom:5 }}>Notes (optional)</label>
                   <input type="text" value={line.staff_notes} onChange={e => updateLine(line._key, 'staff_notes', e.target.value)}
-                    placeholder="e.g. Oatside brand only" style={iStyle} />
+                    placeholder="e.g. Oatside brand only, almost empty" style={iStyle} />
                 </div>
               </div>
             ))}
@@ -225,7 +216,6 @@ export default function NewRequestPage() {
           </button>
         </div>
 
-        {/* Actions */}
         <div style={{ display:'flex', gap:10 }}>
           <button onClick={() => router.back()}
             style={{ background:'transparent', color:'#7a6a50', border:'1px solid #d8cebb', borderRadius:8, padding:'10px 18px', fontSize:12, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
@@ -233,12 +223,11 @@ export default function NewRequestPage() {
           </button>
           <button onClick={handleSubmit} disabled={submitting}
             style={{ flex:1, background:'#EF4576', color:'white', border:'none', borderRadius:8, padding:10, fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", opacity: submitting ? 0.6 : 1 }}>
-            {submitting ? 'Submitting…' : '✓ Submit to ops support'}
+            {submitting ? 'Submitting…' : '🚩 Flag as running low'}
           </button>
         </div>
       </div>
 
-      {/* Toast */}
       {toast && (
         <div style={{ position:'fixed', bottom:22, right:22, background:'#1a1208', color:'#f5f0e8', border:'1px solid #3d3020', borderRadius:12, padding:'12px 16px', fontSize:12, fontWeight:500, display:'flex', alignItems:'center', gap:9, boxShadow:'0 8px 28px rgba(0,0,0,.2)', zIndex:1000 }}>
           <span>{toast.icon}</span><span>{toast.msg}</span>
