@@ -5,8 +5,8 @@ export const dynamic = 'force-dynamic'
 // Place at: app/portal/schedule/team/page.js
 // ─────────────────────────────────────────────
 import { useState, useEffect } from 'react'
-import PortalShell from '../../../../components/PortalShell'
-import { createClient } from '../../../../lib/supabase'
+import PortalShell from '../../../components/PortalShell'
+import { createClient } from '../../../lib/supabase'
 
 const SHIFTS = [
   { id:'am',  label:'AM',  time:'6:30AM–3:30PM',  color:'#4a7a1e', bg:'#eef7e4', border:'#7ab648' },
