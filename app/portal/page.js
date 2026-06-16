@@ -8,9 +8,11 @@ import { createClient } from '../../lib/supabase'
 const toISO = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 const DAYS = ['MON','TUE','WED','THU','FRI','SAT','SUN']
 const SHIFT_BADGE = {
-  am:  { label:'AM',  bg:'#eef7e4', color:'#4a7a1e', border:'#7ab648', time:'6:30AM–3:30PM'  },
-  mid: { label:'MID', bg:'#fef3e2', color:'#a06000',  border:'#d4a843', time:'11AM–8PM'       },
-  pm:  { label:'PM',  bg:'#e8f0fb', color:'#2d5a8a',  border:'#4a90c4', time:'3PM–11PM'       },
+  am:    { label:'AM',  bg:'#eef7e4', color:'#4a7a1e', border:'#7ab648', time:'6:30AM–3:30PM' },
+  ops:   { label:'OPS', bg:'#f5eeff', color:'#7a3a8a', border:'#b06af5', time:'8:00AM–5:00PM' },
+  mid:   { label:'MID', bg:'#fef3e2', color:'#a06000',  border:'#d4a843', time:'11AM–8PM'      },
+  pm:    { label:'PM',  bg:'#e8f0fb', color:'#2d5a8a',  border:'#4a90c4', time:'3PM–11PM'      },
+  other: { label:'—',   bg:'#f0ede8', color:'#7a6a50',  border:'#d8cebb', time:''              },
 }
 
 function getWeekDates() {
