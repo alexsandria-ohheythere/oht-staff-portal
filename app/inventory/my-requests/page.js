@@ -1,12 +1,13 @@
 'use client'
+export const dynamic = 'force-dynamic'
 // ─────────────────────────────────────────────
 // OHT Staff Portal — My Purchase Requests
 // Place at: app/inventory/my-requests/page.js
 // ─────────────────────────────────────────────
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { getMyRequests } from '@/app/lib/inventory'
+import { createClient } from '../../../lib/supabase'
+import { getMyRequests } from '../../../lib/inventory'
 
 const STATUS_STYLE = {
   draft:                  'bg-gray-100 text-gray-600',
@@ -34,16 +35,18 @@ const URGENCY_DOT = { low: 'bg-gray-400', normal: 'bg-green-500', high: 'bg-red-
 
 export default function MyRequestsPage() {
   const router = useRouter()
-  const supabase = createClientComponentClient()
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
+    const sb = createClient()
+    sb.auth.getUser().then(async ({ data }) => {
       if (!data.user) return
-      const reqs = await getMyRequests(data.user.id)
-      setRequests(reqs)
-      setLoading(false)
+      try {
+        const reqs = await getMyRequests(data.user.id)
+        setRequests(reqs)
+      } catch (e) { console.error(e) }
+      finally { setLoading(false) }
     })
   }, [])
 
@@ -54,8 +57,10 @@ export default function MyRequestsPage() {
           <h1 className="text-xl font-semibold text-gray-900">My requests</h1>
           <p className="text-sm text-gray-500">Track your purchase requests</p>
         </div>
-        <button onClick={() => router.push('/inventory/request/new')}
-          className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700">
+        <button
+          onClick={() => router.push('/inventory/request/new')}
+          className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+        >
           + New request
         </button>
       </div>
@@ -65,8 +70,10 @@ export default function MyRequestsPage() {
       ) : requests.length === 0 ? (
         <div className="text-center py-16 space-y-3">
           <p className="text-gray-500 text-sm">No requests yet.</p>
-          <button onClick={() => router.push('/inventory/request/new')}
-            className="text-indigo-600 text-sm font-medium hover:underline">
+          <button
+            onClick={() => router.push('/inventory/request/new')}
+            className="text-indigo-600 text-sm font-medium hover:underline"
+          >
             Submit your first request →
           </button>
         </div>
