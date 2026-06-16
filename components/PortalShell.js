@@ -44,32 +44,32 @@ export default function PortalShell({ children }) {
 
   const NAV = [
     { type: 'section', label: 'Overview' },
-    { href: '/portal',                        icon: '🏠', label: 'Dashboard' },
+    { href: '/portal',                    icon: '🏠', label: 'Dashboard' },
 
     { type: 'section', label: 'Daily' },
-    { href: '/portal/schedule/team',          icon: '📅', label: 'Team Schedule' },
-    { href: '/portal/schedule',               icon: '🗓️', label: 'My Schedule' },
-    { href: '/portal/tasks',                  icon: '✔️', label: 'Daily Check-In' },
-    { href: '/portal/joborders',              icon: '📋', label: 'Job Orders' },
+    { href: '/portal/team',               icon: '📅', label: 'Team Schedule' },
+    { href: '/portal/schedule',           icon: '🗓️', label: 'My Schedule' },
+    { href: '/portal/tasks',              icon: '✔️', label: 'Daily Check-In' },
+    { href: '/portal/joborders',          icon: '📋', label: 'Job Orders' },
     ...(isCashier ? [
-      { href: '/portal/cashout',              icon: '🧾', label: 'Cashout Entry' },
+      { href: '/portal/cashout',          icon: '🧾', label: 'Cashout Entry' },
     ] : []),
 
     { type: 'section', label: 'Request' },
-    { href: '/inventory/my-requests',         icon: '🛒', label: 'Purchase Request' },
+    { href: '/inventory/my-requests',     icon: '🛒', label: 'Purchase Request' },
 
     { type: 'section', label: 'Forms' },
-    { href: '/portal/incident',               icon: '⚠️', label: 'Incident Report' },
-    { href: '/portal/wastage',                icon: '🗑️', label: 'Wastage Report' },
-    { href: '/portal/leave',                  icon: '📤', label: 'Request Leave' },
-    { href: '/portal/overtime',               icon: '⏰', label: 'Request Overtime' },
+    { href: '/portal/incident',           icon: '⚠️', label: 'Incident Report' },
+    { href: '/portal/wastage',            icon: '🗑️', label: 'Wastage Report' },
+    { href: '/portal/leave',              icon: '📤', label: 'Request Leave' },
+    { href: '/portal/overtime',           icon: '⏰', label: 'Request Overtime' },
 
     { type: 'section', label: 'My Documents' },
-    { href: '/portal/payslip',                icon: '💸', label: 'My Payslips' },
-    { href: '/portal/contracts',              icon: '📄', label: 'My Contracts',   badge: pendingContracts },
-    { href: '/portal/files',                  icon: '📁', label: 'My Files · 201' },
+    { href: '/portal/payslip',            icon: '💸', label: 'My Payslips' },
+    { href: '/portal/contracts',          icon: '📄', label: 'My Contracts', badge: pendingContracts },
+    { href: '/portal/files',              icon: '📁', label: 'My Files · 201' },
 
-    { href: '/portal/notifications',          icon: '🔔', label: 'Notifications',  badge: unreadCount },
+    { href: '/portal/notifications',      icon: '🔔', label: 'Notifications', badge: unreadCount },
   ]
 
   const isActive = href => {
@@ -81,13 +81,11 @@ export default function PortalShell({ children }) {
     <div style={{ display:'flex', height:'100vh', overflow:'hidden', fontFamily:"'DM Sans',sans-serif" }}>
       <div style={{ width:220, flexShrink:0, background:'#EF4576', display:'flex', flexDirection:'column' }}>
 
-        {/* Logo */}
         <div style={{ padding:'20px 18px 14px', borderBottom:'1px solid rgba(255,255,255,.2)' }}>
           <div style={{ fontFamily:"'Montserrat',sans-serif", fontSize:14, fontWeight:900, color:'white' }}>Oh Hey There</div>
           <div style={{ fontSize:9, color:'rgba(255,255,255,.6)', letterSpacing:2, textTransform:'uppercase', marginTop:2 }}>Staff Portal</div>
         </div>
 
-        {/* Profile chip */}
         {checked && (
           <div style={{ margin:'12px 12px 4px', background:'rgba(255,255,255,.15)', borderRadius:10, padding:'10px 12px' }}>
             <div style={{ fontSize:12, fontWeight:600, color:'white' }}>{name}</div>
@@ -95,7 +93,6 @@ export default function PortalShell({ children }) {
           </div>
         )}
 
-        {/* Nav */}
         <nav style={{ flex:1, padding:'8px 0', overflowY:'auto' }}>
           {NAV.map((item, i) => {
             if (item.type === 'section') return (
@@ -103,7 +100,6 @@ export default function PortalShell({ children }) {
                 {item.label}
               </div>
             )
-
             const active = isActive(item.href)
             return (
               <a key={item.href} href={item.href}
@@ -122,7 +118,6 @@ export default function PortalShell({ children }) {
           })}
         </nav>
 
-        {/* Sign out */}
         <div style={{ padding:12, borderTop:'1px solid rgba(255,255,255,.15)' }}>
           <button onClick={signOut} style={{ width:'100%', background:'rgba(0,0,0,.15)', border:'1px solid rgba(255,255,255,.2)', color:'white', padding:8, borderRadius:8, fontSize:11, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", fontWeight:500 }}>
             Sign Out
