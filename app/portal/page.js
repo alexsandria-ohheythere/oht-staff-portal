@@ -133,8 +133,8 @@ export default function StaffDashboard() {
                         <div style={{ fontSize:9, fontWeight:700, color:'#a06000', background:'#fef3e2', borderRadius:6, padding:'3px 4px' }}>On Leave</div>
                       ) : dayShifts.length === 0 ? (
                         <div style={{ fontSize:9, color: isToday ? 'rgba(255,255,255,.5)' : '#d8cebb' }}>—</div>
-                      ) : dayShifts.map(s => {
-                        const badge = SHIFT_BADGE[s.shift_type]
+                      } : dayShifts.map(s => {
+                        const badge = SHIFT_BADGE[s.shift_type] || SHIFT_BADGE['am']
                         return (
                           <div key={s.id} style={{ background: isToday ? 'rgba(255,255,255,.2)' : badge.bg, border: `1px solid ${isToday ? 'rgba(255,255,255,.3)' : badge.border}`, borderRadius:6, padding:'3px 4px', marginBottom:3 }}>
                             <div style={{ fontSize:10, fontWeight:700, color: isToday ? 'white' : badge.color }}>{badge.label}</div>
