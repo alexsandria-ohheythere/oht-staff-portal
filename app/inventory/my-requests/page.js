@@ -1,278 +1,210 @@
 'use client'
 export const dynamic = 'force-dynamic'
-import { useState, useEffect, useCallback } from 'react'
-import AuthShell from '../../../components/AuthShell'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import PortalShell from '../../../components/PortalShell'
 import { createClient } from '../../../lib/supabase'
-import { getPurchaseLists, supervisorApproveList, supervisorRejectList, markListPurchased } from '../../../lib/inventory'
+import { getMyRequests } from '../../../lib/inventory'
 
-const LIST_STATUS_STYLE = {
-  pending_supervisor: { bg:'#fef3c7', color:'#92400e' },
-  approved:           { bg:'#dcfce7', color:'#166534' },
-  rejected:           { bg:'#fee2e2', color:'#991b1b' },
-  purchased:          { bg:'#ccfbf1', color:'#065f46' },
-  closed:             { bg:'#f3f4f6', color:'#4b5563' },
-}
-const LIST_STATUS_LABEL = {
-  pending_supervisor: 'Awaiting approval',
-  approved:           'Approved',
-  rejected:           'Returned to support',
-  purchased:          'Purchased',
-  closed:             'Closed',
-}
+const STEPS = [
+  { key: 'submitted',           label: 'Submitted'    },
+  { key: 'queued',              label: 'Ops Reviewed' },
+  { key: 'pending_supervisor',  label: 'Sent to CJ'  },
+  { key: 'approved',            label: 'CJ Approved'  },
+  { key: 'purchased',           label: 'Purchased ✓'  },
+]
 
-function Toast({ msg, type, onClose }) {
-  useEffect(() => { const t = setTimeout(onClose, 3500); return () => clearTimeout(t) }, [])
-  return (
-    <div style={{ position:'fixed', bottom:24, right:24, zIndex:9999, padding:'12px 18px', borderRadius:12, background:type==='error'?'#dc2626':'#111', color:'white', fontSize:13, fontWeight:500, boxShadow:'0 4px 20px rgba(0,0,0,.2)' }}>
-      {msg}
-    </div>
-  )
-}
-
-function useToast() {
-  const [toast, setToast] = useState(null)
-  const show = (msg, type = 'success') => setToast({ msg, type })
-  const hide = () => setToast(null)
-  const el = toast ? <Toast msg={toast.msg} type={toast.type} onClose={hide} /> : null
-  return { show, el }
-}
-
-function PurchaseListCard({ list, supervisorId, onAction, showToast }) {
-  const [expanded, setExpanded] = useState(list.status === 'pending_supervisor')
-  const [loading, setLoading] = useState(false)
-  const [showReject, setShowReject] = useState(false)
-  const [showPurchased, setShowPurchased] = useState(false)
-  const [rejectReason, setRejectReason] = useState('')
-  const [actualTotal, setActualTotal] = useState('')
-  const [notes, setNotes] = useState('')
-
-  const handleApprove = async () => {
-    setLoading(true)
-    try { await supervisorApproveList(list.id, supervisorId, notes || undefined); showToast(`${list.list_number} approved — support dispatched`); onAction() }
-    catch (e) { showToast(e.message, 'error') }
-    finally { setLoading(false) }
+function stepIndex(status) {
+  const map = {
+    submitted:              0,
+    rejected_by_support:    0,
+    queued:                 1,
+    pending_supervisor:     2,
+    approved:               3,
+    rejected_by_supervisor: 3,
+    purchased:              4,
+    done:                   4,
   }
+  return map[status] ?? 0
+}
 
-  const handleReject = async () => {
-    if (!rejectReason.trim()) return showToast('Add a reason', 'error')
-    setLoading(true)
-    try { await supervisorRejectList(list.id, supervisorId, rejectReason.trim()); showToast(`${list.list_number} returned to support`); onAction() }
-    catch (e) { showToast(e.message, 'error') }
-    finally { setLoading(false) }
-  }
+const STATUS_META = {
+  submitted:              { label:'Submitted',              color:'#2d5a8a', bg:'#e8f0fb' },
+  queued:                 { label:'In purchase list',       color:'#5b3ea8', bg:'#f0eaff' },
+  rejected_by_support:    { label:'Returned — edit needed', color:'#c0392b', bg:'#fdeaea' },
+  pending_supervisor:     { label:'Awaiting CJ',            color:'#a06000', bg:'#fef3e2' },
+  approved:               { label:'CJ Approved ✓',          color:'#4a7a1e', bg:'#eef7e4' },
+  rejected_by_supervisor: { label:'Returned by CJ',         color:'#c0392b', bg:'#fdeaea' },
+  purchased:              { label:'Purchased ✓',            color:'#0d6e5a', bg:'#e0faf4' },
+  done:                   { label:'Done',                   color:'#7a6a50', bg:'#f0ede8'  },
+}
 
-  const handleMarkPurchased = async () => {
-    if (!actualTotal) return showToast('Enter the actual total spent', 'error')
-    setLoading(true)
-    try { await markListPurchased(list.id, supervisorId, parseFloat(actualTotal)); showToast(`${list.list_number} marked as purchased`); onAction() }
-    catch (e) { showToast(e.message, 'error') }
-    finally { setLoading(false) }
-  }
-
-  const variance = list.actual_total != null && list.est_total != null
-    ? ((list.actual_total - list.est_total) / list.est_total) * 100 : null
-
-  const st = LIST_STATUS_STYLE[list.status] ?? LIST_STATUS_STYLE.closed
+function TicketCard({ req }) {
+  const [expanded, setExpanded] = useState(false)
+  const st  = STATUS_META[req.status] ?? STATUS_META.submitted
+  const idx = stepIndex(req.status)
+  const isRejected = req.status === 'rejected_by_support' || req.status === 'rejected_by_supervisor'
 
   return (
-    <div style={{ background:'white', border: list.status==='pending_supervisor' ? '1px solid #fbbf24' : '1px solid #e5e7eb', borderRadius:12, overflow:'hidden', marginBottom:12 }}>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px', cursor:'pointer' }} onClick={() => setExpanded(v => !v)}>
-        <div>
-          <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-            <span style={{ fontSize:11, fontFamily:'monospace', color:'#9ca3af' }}>{list.list_number}</span>
-            <span style={{ padding:'2px 10px', borderRadius:20, fontSize:11, fontWeight:600, background:st.bg, color:st.color }}>{LIST_STATUS_LABEL[list.status]}</span>
+    <div style={{ background:'white', border:`1px solid ${isRejected ? '#f5c6c6' : '#d8cebb'}`, borderRadius:12, overflow:'hidden', borderLeft:`4px solid ${isRejected ? '#c0392b' : '#EF4576'}` }}>
+      <div style={{ padding:'14px 16px', cursor:'pointer', display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:12 }}
+        onClick={() => setExpanded(v => !v)}>
+        <div style={{ minWidth:0, flex:1 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4, flexWrap:'wrap' }}>
+            <span style={{ fontSize:10, fontFamily:'monospace', color:'#aaa' }}>{req.pr_number}</span>
+            <span style={{ fontSize:10, fontWeight:700, padding:'2px 9px', borderRadius:8, background:st.bg, color:st.color }}>{st.label}</span>
+            {req.urgency === 'high' && <span style={{ fontSize:10, fontWeight:700, padding:'2px 9px', borderRadius:8, background:'#fdeaea', color:'#c0392b' }}>🔴 Urgent</span>}
           </div>
-          <p style={{ fontSize:14, fontWeight:600, color:'#111', margin:'3px 0 0' }}>{list.title}</p>
-          <p style={{ fontSize:12, color:'#9ca3af', margin:'2px 0 0' }}>
-            {list.items?.length ?? 0} items
-            {list.est_total != null && ` · Est. ₱ ${list.est_total.toLocaleString('en-PH',{minimumFractionDigits:2})}`}
-          </p>
+          <div style={{ fontSize:14, fontWeight:700, color:'#1a1208', marginBottom:3 }}>{req.title}</div>
+          <div style={{ fontSize:11, color:'#7a6a50' }}>{req.items?.length ?? 0} item{req.items?.length !== 1 ? 's' : ''}</div>
         </div>
-        <span style={{ color:'#9ca3af', fontSize:12 }}>{expanded ? '▲' : '▼'}</span>
+        <span style={{ color:'#aaa', fontSize:12, flexShrink:0, marginTop:2 }}>{expanded ? '▲' : '▼'}</span>
       </div>
 
+      {/* Progress track */}
+      <div style={{ padding:'0 16px 14px' }}>
+        <div style={{ display:'flex', alignItems:'flex-start' }}>
+          {STEPS.map((step, i) => {
+            const done    = i <= idx && !isRejected
+            const current = i === idx
+            const rejected = isRejected && i === idx
+            const dotColor = rejected ? '#c0392b' : done ? '#EF4576' : '#e0d8ce'
+            const lineColor = i < idx && !isRejected ? '#EF4576' : '#e0d8ce'
+            return (
+              <div key={step.key} style={{ display:'flex', alignItems:'flex-start', flex: i < STEPS.length - 1 ? 1 : 0 }}>
+                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
+                  <div style={{ width:20, height:20, borderRadius:'50%', background:dotColor, display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:'white', fontWeight:700, flexShrink:0 }}>
+                    {rejected ? '✕' : done ? '✓' : ''}
+                  </div>
+                  <span style={{ fontSize:9, color: done || rejected ? '#1a1208' : '#aaa', fontWeight: current ? 700 : 400, whiteSpace:'nowrap', textAlign:'center', maxWidth:56 }}>{step.label}</span>
+                </div>
+                {i < STEPS.length - 1 && (
+                  <div style={{ flex:1, height:2, background:lineColor, margin:'9px 4px 0' }} />
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {isRejected && req.support_notes && (
+        <div style={{ margin:'0 16px 14px', background:'#fdeaea', border:'1px solid #f5c6c6', borderRadius:8, padding:'8px 12px', fontSize:12, color:'#c0392b' }}>
+          <span style={{ fontWeight:700 }}>Returned: </span>{req.support_notes}
+        </div>
+      )}
+
       {expanded && (
-        <div style={{ borderTop:'1px solid #f3f4f6', padding:'12px 16px' }}>
-          {list.supervisor_notes && <p style={{ fontSize:12, color:'#6b7280', fontStyle:'italic', background:'#f9fafb', borderRadius:8, padding:'8px 12px', marginBottom:12 }}>"{list.supervisor_notes}"</p>}
-
-          <div style={{ border:'1px solid #f3f4f6', borderRadius:10, overflow:'hidden', marginBottom:12 }}>
-            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
-              <thead style={{ background:'#f9fafb', borderBottom:'1px solid #f3f4f6' }}>
-                <tr>{['Item','Qty','Store','Requested by','Est.'].map(h => <th key={h} style={{ textAlign:h==='Est.'?'right':'left', padding:'8px 12px', fontSize:11, fontWeight:600, color:'#6b7280' }}>{h}</th>)}</tr>
-              </thead>
-              <tbody>
-                {list.items?.map(item => (
-                  <tr key={item.id} style={{ borderBottom:'1px solid #f9fafb' }}>
-                    <td style={{ padding:'8px 12px', fontWeight:600, color:'#1f2937' }}>{item.item_name}</td>
-                    <td style={{ padding:'8px 12px', color:'#6b7280' }}>{item.quantity} {item.unit}</td>
-                    <td style={{ padding:'8px 12px', color:'#6b7280', fontSize:11 }}>{item.preferred_store ?? '—'}</td>
-                    <td style={{ padding:'8px 12px', color:'#9ca3af', fontSize:11 }}>{item.requested_by_name ?? '—'}</td>
-                    <td style={{ padding:'8px 12px', textAlign:'right', color:'#374151' }}>{item.est_total != null ? `₱ ${item.est_total.toLocaleString('en-PH',{minimumFractionDigits:2})}` : '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-              {list.est_total != null && (
-                <tfoot style={{ borderTop:'1px solid #e5e7eb', background:'#f9fafb' }}>
-                  <tr>
-                    <td colSpan={4} style={{ padding:'8px 12px', fontWeight:600, color:'#374151' }}>Total</td>
-                    <td style={{ padding:'8px 12px', textAlign:'right', fontWeight:700 }}>₱ {list.est_total.toLocaleString('en-PH',{minimumFractionDigits:2})}</td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
+        <div style={{ borderTop:'1px solid #f0ede8', padding:'12px 16px' }}>
+          {req.notes && (
+            <div style={{ background:'#faf7f2', borderRadius:8, padding:'8px 12px', fontSize:12, color:'#7a6a50', fontStyle:'italic', marginBottom:10 }}>
+              "{req.notes}"
+            </div>
+          )}
+          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            {req.items?.map(item => (
+              <div key={item.id} style={{ background:'#faf7f2', borderRadius:8, padding:'10px 12px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:600, color:'#1a1208' }}>{item.item_name}</div>
+                  <div style={{ fontSize:11, color:'#7a6a50', marginTop:1 }}>{item.quantity} {item.unit}{item.staff_notes ? ` · ${item.staff_notes}` : ''}</div>
+                </div>
+                <span style={{ fontSize:10, color:'#aaa', background:'#e8e0d5', padding:'2px 8px', borderRadius:6, flexShrink:0 }}>{item.category}</span>
+              </div>
+            ))}
           </div>
-
-          {list.status === 'purchased' && list.actual_total != null && (
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'#f0fdf4', borderRadius:10, padding:'10px 14px', marginBottom:12 }}>
-              <span style={{ fontSize:13, color:'#166534' }}>Actual spent: <strong>₱ {list.actual_total.toLocaleString('en-PH',{minimumFractionDigits:2})}</strong></span>
-              {variance != null && <span style={{ fontSize:11, fontWeight:600, padding:'2px 8px', borderRadius:20, background: Math.abs(variance)<5?'#dcfce7':'#fef3c7', color: Math.abs(variance)<5?'#166534':'#92400e' }}>{variance>0?'+':''}{variance.toFixed(1)}% vs estimate</span>}
-            </div>
-          )}
-
-          {list.status === 'pending_supervisor' && !showReject && (
-            <div style={{ marginBottom:12 }}>
-              <label style={{ fontSize:11, color:'#6b7280' }}>Note for support (optional)</label>
-              <input type="text" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any reminders before they go..."
-                style={{ width:'100%', border:'1px solid #e5e7eb', borderRadius:8, padding:'8px 12px', fontSize:13, outline:'none', boxSizing:'border-box', marginTop:4 }} />
-            </div>
-          )}
-
-          {showReject && (
-            <div style={{ marginBottom:12 }}>
-              <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} rows={2} placeholder="Reason for returning to support…"
-                style={{ width:'100%', border:'1px solid #fca5a5', borderRadius:8, padding:'8px 12px', fontSize:13, outline:'none', resize:'none', boxSizing:'border-box' }} />
-              <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:8 }}>
-                <button onClick={() => setShowReject(false)} style={{ padding:'6px 14px', fontSize:12, border:'1px solid #e5e7eb', borderRadius:8, background:'white', cursor:'pointer' }}>Cancel</button>
-                <button onClick={handleReject} disabled={loading} style={{ padding:'6px 14px', fontSize:12, border:'none', borderRadius:8, background:'#dc2626', color:'white', cursor:'pointer', opacity:loading?0.5:1 }}>Return to support</button>
-              </div>
-            </div>
-          )}
-
-          {showPurchased && (
-            <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:10, padding:12, marginBottom:12 }}>
-              <p style={{ fontSize:13, fontWeight:600, color:'#166534', marginBottom:8 }}>Mark as purchased</p>
-              <div style={{ display:'flex', border:'1px solid #86efac', borderRadius:8, overflow:'hidden', background:'white' }}>
-                <span style={{ padding:'8px 12px', background:'#f9fafb', fontSize:13, color:'#6b7280', borderRight:'1px solid #86efac' }}>₱</span>
-                <input type="number" value={actualTotal} onChange={e => setActualTotal(e.target.value)} placeholder="Actual total spent"
-                  style={{ flex:1, border:'none', padding:'8px 12px', fontSize:13, outline:'none' }} />
-              </div>
-              <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:8 }}>
-                <button onClick={() => setShowPurchased(false)} style={{ padding:'6px 14px', fontSize:12, border:'1px solid #e5e7eb', borderRadius:8, background:'white', cursor:'pointer' }}>Cancel</button>
-                <button onClick={handleMarkPurchased} disabled={loading} style={{ padding:'6px 14px', fontSize:12, border:'none', borderRadius:8, background:'#16a34a', color:'white', cursor:'pointer', opacity:loading?0.5:1 }}>
-                  {loading ? 'Saving…' : 'Confirm purchased'}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {!showReject && !showPurchased && (
-            <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
-              {list.status === 'pending_supervisor' && (
-                <>
-                  <button onClick={() => setShowReject(true)} style={{ padding:'7px 14px', fontSize:12, border:'1px solid #fca5a5', borderRadius:8, background:'white', color:'#dc2626', cursor:'pointer' }}>✕ Return to support</button>
-                  <button onClick={handleApprove} disabled={loading} style={{ padding:'7px 16px', fontSize:12, fontWeight:600, border:'none', borderRadius:8, background:'#16a34a', color:'white', cursor:'pointer', opacity:loading?0.5:1 }}>
-                    {loading ? 'Approving…' : '✓ Approve — dispatch support'}
-                  </button>
-                </>
-              )}
-              {list.status === 'approved' && (
-                <button onClick={() => setShowPurchased(true)} style={{ padding:'7px 16px', fontSize:12, fontWeight:600, border:'none', borderRadius:8, background:'#0d9488', color:'white', cursor:'pointer' }}>
-                  Mark as purchased
-                </button>
-              )}
-            </div>
-          )}
         </div>
       )}
     </div>
   )
 }
 
-export default function CJApprovalPage() {
-  const [supervisorId, setSupervisorId] = useState(null)
-  const [pending, setPending]   = useState([])
-  const [approved, setApproved] = useState([])
-  const [history, setHistory]   = useState([])
+export default function MyRequestsPage() {
+  const router = useRouter()
+  const [requests, setRequests] = useState([])
   const [loading, setLoading]   = useState(true)
-  const { show: showToast, el: toastEl } = useToast()
+  const [filter, setFilter]     = useState('active')
+  const [toast, setToast]       = useState(null)
 
-  const load = useCallback(async () => {
-    try {
-      const [pend, appr, hist] = await Promise.all([
-        getPurchaseLists(['pending_supervisor']),
-        getPurchaseLists(['approved']),
-        getPurchaseLists(['purchased', 'closed']),
-      ])
-      setPending(pend); setApproved(appr); setHistory(hist)
-    } catch(e) { console.error(e) }
-    finally { setLoading(false) }
-  }, [])
+  function showToast(icon, msg) {
+    setToast({ icon, msg })
+    setTimeout(() => setToast(null), 3000)
+  }
 
   useEffect(() => {
     const sb = createClient()
-    // ✅ Look up staff row by email — don't use raw auth UUID
     sb.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) return
-      const { data: staff } = await sb.from('staff').select('id').eq('email', session.user.email).single()
-      setSupervisorId(staff?.id ?? session.user.id)
-      load()
+      try {
+        const { data: staff } = await sb.from('staff').select('id').eq('email', session.user.email).single()
+        if (!staff) return
+        const reqs = await getMyRequests(staff.id)
+        setRequests(reqs)
+      } catch (e) {
+        console.error(e)
+        showToast('❌', 'Failed to load requests')
+      } finally {
+        setLoading(false)
+      }
     })
   }, [])
 
-  const totalPendingValue = pending.reduce((s, l) => s + (l.est_total ?? 0), 0)
+  const active = requests.filter(r => !['purchased','done'].includes(r.status))
+  const done   = requests.filter(r =>  ['purchased','done'].includes(r.status))
+  const shown  = filter === 'active' ? active : done
 
   return (
-    <AuthShell>
-      {toastEl}
-      <div className="topbar">
-        <div>
-          <div className="topbar-title">Purchase Approvals</div>
-          <div className="topbar-sub">Review consolidated purchase lists from ops support</div>
-        </div>
+    <PortalShell>
+      <div style={{ background:'white', borderBottom:'1px solid #d8cebb', padding:'0 24px', height:56, display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+        <div style={{ fontFamily:"'Montserrat',sans-serif", fontSize:17, fontWeight:700, color:'#1a1208' }}>My Purchase Requests</div>
+        <button onClick={() => router.push('/inventory/request/new')}
+          style={{ background:'#EF4576', color:'white', border:'none', borderRadius:8, padding:'7px 14px', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+          + New Request
+        </button>
       </div>
 
-      <div style={{ padding:'24px', maxWidth:760 }}>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:24 }}>
+      <div style={{ flex:1, overflowY:'auto', padding:'22px 24px' }}>
+        <div style={{ display:'flex', gap:8, marginBottom:20 }}>
           {[
-            { label:'Pending your approval', value: pending.length,  color:'#d97706' },
-            { label:'Approved — on errand',  value: approved.length, color:'#16a34a' },
-            { label:'Pending value', value:`₱ ${totalPendingValue.toLocaleString('en-PH')}`, color:'#111' },
-          ].map(s => (
-            <div key={s.label} style={{ background:'white', border:'1px solid #e5e7eb', borderRadius:12, padding:16 }}>
-              <p style={{ fontSize:11, color:'#6b7280', margin:0 }}>{s.label}</p>
-              <p style={{ fontSize:24, fontWeight:700, color:s.color, margin:'4px 0 0' }}>{s.value}</p>
-            </div>
+            { key:'active', label:`Active (${active.length})` },
+            { key:'done',   label:`Completed (${done.length})` },
+          ].map(tab => (
+            <button key={tab.key} onClick={() => setFilter(tab.key)}
+              style={{ padding:'7px 16px', fontSize:12, fontWeight:600, borderRadius:8, border:'none', cursor:'pointer', fontFamily:"'DM Sans',sans-serif",
+                background: filter === tab.key ? '#EF4576' : 'white',
+                color:      filter === tab.key ? 'white'   : '#7a6a50',
+                boxShadow:  filter === tab.key ? 'none' : '0 0 0 1px #d8cebb',
+              }}>
+              {tab.label}
+            </button>
           ))}
         </div>
 
-        {loading ? <p style={{ color:'#9ca3af', fontSize:13, textAlign:'center', padding:40 }}>Loading…</p> : (
-          <>
-            {pending.length > 0 && (
-              <div style={{ marginBottom:32 }}>
-                <p style={{ fontSize:11, fontWeight:700, letterSpacing:2, textTransform:'uppercase', color:'#9ca3af', marginBottom:12 }}>Awaiting your approval</p>
-                {pending.map(list => <PurchaseListCard key={list.id} list={list} supervisorId={supervisorId} onAction={load} showToast={showToast} />)}
-              </div>
+        {loading ? (
+          <div style={{ textAlign:'center', padding:'60px', color:'#7a6a50', fontSize:13 }}>Loading…</div>
+        ) : shown.length === 0 ? (
+          <div style={{ textAlign:'center', padding:'60px', background:'white', border:'1px solid #d8cebb', borderRadius:13 }}>
+            <div style={{ fontSize:40, marginBottom:12 }}>🛒</div>
+            <div style={{ fontFamily:"'Montserrat',sans-serif", fontSize:15, fontWeight:700, color:'#1a1208', marginBottom:6 }}>
+              {filter === 'active' ? 'No active requests' : 'No completed requests yet'}
+            </div>
+            {filter === 'active' && (
+              <button onClick={() => router.push('/inventory/request/new')}
+                style={{ background:'#EF4576', color:'white', border:'none', borderRadius:8, padding:'9px 20px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginTop:8 }}>
+                + Submit a Request
+              </button>
             )}
-            {approved.length > 0 && (
-              <div style={{ marginBottom:32 }}>
-                <p style={{ fontSize:11, fontWeight:700, letterSpacing:2, textTransform:'uppercase', color:'#9ca3af', marginBottom:12 }}>Approved — support on errand</p>
-                {approved.map(list => <PurchaseListCard key={list.id} list={list} supervisorId={supervisorId} onAction={load} showToast={showToast} />)}
-              </div>
-            )}
-            {history.length > 0 && (
-              <div>
-                <p style={{ fontSize:11, fontWeight:700, letterSpacing:2, textTransform:'uppercase', color:'#9ca3af', marginBottom:12 }}>Recent history</p>
-                {history.map(list => <PurchaseListCard key={list.id} list={list} supervisorId={supervisorId} onAction={load} showToast={showToast} />)}
-              </div>
-            )}
-            {pending.length === 0 && approved.length === 0 && history.length === 0 && (
-              <div style={{ textAlign:'center', padding:60, background:'#f9fafb', borderRadius:12, border:'1px dashed #e5e7eb' }}>
-                <p style={{ color:'#9ca3af', fontSize:13 }}>No purchase lists yet</p>
-              </div>
-            )}
-          </>
+          </div>
+        ) : (
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {shown.map(req => <TicketCard key={req.id} req={req} />)}
+          </div>
         )}
       </div>
-    </AuthShell>
+
+      {toast && (
+        <div style={{ position:'fixed', bottom:22, right:22, background:'#1a1208', color:'#f5f0e8', border:'1px solid #3d3020', borderRadius:12, padding:'12px 16px', fontSize:12, fontWeight:500, display:'flex', alignItems:'center', gap:9, boxShadow:'0 8px 28px rgba(0,0,0,.2)', zIndex:1000 }}>
+          <span>{toast.icon}</span><span>{toast.msg}</span>
+        </div>
+      )}
+    </PortalShell>
   )
 }
