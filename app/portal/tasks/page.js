@@ -38,6 +38,7 @@ export default function MyTasks() {
   const [shifts, setShifts]   = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(null)
+  const [error, setError]     = useState(null)
   const today = toISO(new Date())
   const todayLabel = new Date().toLocaleDateString('en-PH',{weekday:'long',month:'long',day:'numeric',year:'numeric'})
 
@@ -46,18 +47,70 @@ export default function MyTasks() {
   async function init() {
     try {
       const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
-      const { data: s } = await supabase.from('staff').select('*').eq('email', session.user.email).single()
-      if (!s) { setLoading(false); return }
+
+      // Get session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError || !session) { setError('No session'); setLoading(false); return }
+
+      const authEmail = session.user.email
+
+      // Find staff by email
+      const { data: s, error: staffError } = await supabase
+        .from('staff')
+        .select('*')
+        .eq('email', authEmail)
+        .single()
+
+      if (staffError || !s) {
+        // Try by user id as fallback
+        const { data: s2, error: s2Error } = await supabase
+          .from('staff')
+          .select('*')
+          .eq('email', authEmail)
+        
+        if (!s2 || s2.length === 0) {
+          setError(`No staff record found for ${authEmail}`)
+          setLoading(false)
+          return
+        }
+        setStaff(s2[0])
+        await loadData(supabase, s2[0].id)
+        return
+      }
+
       setStaff(s)
-      const [{ data: t }, { data: sh }] = await Promise.all([
-        supabase.from('shift_task_assignments').select('*, role_tasks(task_name)').eq('staff_id', s.id).eq('shift_date', today).order('created_at'),
-        supabase.from('schedules').select('*').eq('staff_id', s.id).eq('shift_date', today),
+      await loadData(supabase, s.id)
+
+    } catch(e) {
+      setError(e.message)
+      setLoading(false)
+    }
+  }
+
+  async function loadData(supabase, staffId) {
+    try {
+      const [{ data: t, error: tErr }, { data: sh, error: shErr }] = await Promise.all([
+        supabase
+          .from('shift_task_assignments')
+          .select('*, role_tasks(task_name)')
+          .eq('staff_id', staffId)
+          .eq('shift_date', today)
+          .order('created_at'),
+        supabase
+          .from('schedules')
+          .select('*')
+          .eq('staff_id', staffId)
+          .eq('shift_date', today),
       ])
+
+      if (tErr) setError(`Tasks error: ${tErr.message}`)
+      if (shErr) setError(`Schedule error: ${shErr.message}`)
+
       setTasks(t || [])
       setShifts(sh || [])
-    } catch(e) { console.error(e) }
+    } catch(e) {
+      setError(e.message)
+    }
     setLoading(false)
   }
 
@@ -114,6 +167,14 @@ export default function MyTasks() {
       </div>
 
       <div style={{ flex:1, overflowY:'auto', padding:'20px 24px' }}>
+
+        {/* Debug error display */}
+        {error && (
+          <div style={{ background:'#fee2e2', border:'1px solid #fca5a5', borderRadius:10, padding:'12px 16px', marginBottom:16, fontSize:12, color:'#991b1b' }}>
+            ⚠️ {error}
+          </div>
+        )}
+
         {loading ? (
           <div style={{ textAlign:'center', padding:'60px', color:'#7a6a50' }}>Loading…</div>
 
@@ -122,6 +183,7 @@ export default function MyTasks() {
             <div style={{ fontSize:40, marginBottom:12 }}>😴</div>
             <div style={{ fontFamily:"'Montserrat',sans-serif", fontSize:15, fontWeight:700, marginBottom:6 }}>No shift today</div>
             <div style={{ fontSize:12, color:'#7a6a50' }}>Enjoy your rest! ☕</div>
+            {staff && <div style={{ fontSize:11, color:'#9ca3af', marginTop:8 }}>Logged in as: {staff.email}</div>}
           </div>
 
         ) : totalTasks === 0 ? (
@@ -133,7 +195,6 @@ export default function MyTasks() {
 
         ) : (
           <>
-            {/* SCORE TRACKER */}
             <div style={{ background:'white', border:'1px solid #d8cebb', borderRadius:14, padding:'18px 20px', marginBottom:16 }}>
               <div style={{ fontSize:10, fontWeight:700, letterSpacing:1.5, textTransform:'uppercase', color:'#7a6a50', marginBottom:14 }}>
                 Shift Task Score Tracker
@@ -171,14 +232,12 @@ export default function MyTasks() {
               </div>
             </div>
 
-            {/* TASKS BY SHIFT */}
             {shiftScores.map(({ shiftId, pct, tasks: shiftTasks }) => {
               const ss = SHIFT_STYLES[shiftId] || SHIFT_STYLES.am
               const shiftDone = shiftTasks.filter(t => t.completed).length
               const shiftComplete = shiftDone === shiftTasks.length
-
               return (
-                <div key={shiftId} style={{ background:'white', border:`1px solid ${shiftComplete?'#7ab648':'#d8cebb'}`, borderRadius:13, overflow:'hidden', marginBottom:12, transition:'border-color .3s' }}>
+                <div key={shiftId} style={{ background:'white', border:`1px solid ${shiftComplete?'#7ab648':'#d8cebb'}`, borderRadius:13, overflow:'hidden', marginBottom:12 }}>
                   <div style={{ background: shiftComplete?'#eef7e4':ss.bg, padding:'12px 18px', borderBottom:`1px solid ${shiftComplete?'#7ab64844':ss.border+'44'}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                       <span style={{ fontSize:18 }}>{ss.emoji}</span>
@@ -200,7 +259,6 @@ export default function MyTasks() {
                       {shiftComplete && <span style={{ fontSize:16 }}>✅</span>}
                     </div>
                   </div>
-
                   {shiftTasks.map((t, idx) => (
                     <div key={t.id}
                       onClick={() => saving !== t.id && toggleTask(t.id, !t.completed)}
