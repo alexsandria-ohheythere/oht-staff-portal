@@ -57,8 +57,8 @@ export default function PortalShell({ children }) {
     ] : []),
 
     { type: 'section', label: 'Request' },
-    { href: '/inventory/my-requests',     icon: '🛒', label: 'Purchase Request' },
-
+    { href: '/inventory/my-requests', icon: '🚩', label: 'Running Low Request' },
+    
     { type: 'section', label: 'Forms' },
     { href: '/portal/incident',           icon: '⚠️', label: 'Incident Report' },
     { href: '/portal/wastage',            icon: '🗑️', label: 'Wastage Report' },
