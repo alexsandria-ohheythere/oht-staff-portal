@@ -1,12 +1,12 @@
 // ─────────────────────────────────────────────
 // OHT Inventory — Supabase queries
-// Place at: app/lib/inventory.js
+// Place at: lib/inventory.js  (same folder as lib/supabase.js)
 // ─────────────────────────────────────────────
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from './supabase'
 
-const sb = () => createClientComponentClient()
+const sb = () => createClient()
 
-// ─── Catalog ──────────────────────────────────
+// ─── Catalog ─────────────────────────────────
 
 export async function getCatalog() {
   const { data, error } = await sb()
@@ -34,7 +34,7 @@ export async function getMyRequests(staffId) {
 export async function getSubmittedRequests() {
   const { data, error } = await sb()
     .from('purchase_requests')
-    .select(`*, items:purchase_request_items(*), submitted_by_staff:staff!submitted_by(id, full_name)`)
+    .select('*, items:purchase_request_items(*), submitted_by_staff:staff!submitted_by(id, full_name)')
     .in('status', ['submitted', 'rejected_by_support'])
     .order('created_at', { ascending: false })
   if (error) throw error
@@ -44,7 +44,7 @@ export async function getSubmittedRequests() {
 export async function getQueuedRequests() {
   const { data, error } = await sb()
     .from('purchase_requests')
-    .select(`*, items:purchase_request_items(*), submitted_by_staff:staff!submitted_by(id, full_name)`)
+    .select('*, items:purchase_request_items(*), submitted_by_staff:staff!submitted_by(id, full_name)')
     .eq('status', 'queued')
     .is('purchase_list_id', null)
     .order('created_at', { ascending: false })
@@ -75,12 +75,9 @@ export async function createRequest(staffId, payload) {
   }
 
   await logActivity({
-    entity_type: 'purchase_request',
-    entity_id: req.id,
-    actor_id: staffId,
-    actor_role: 'staff',
-    action: 'submitted',
-    to_status: 'submitted',
+    entity_type: 'purchase_request', entity_id: req.id,
+    actor_id: staffId, actor_role: 'staff',
+    action: 'submitted', to_status: 'submitted',
   })
 
   return req
@@ -140,9 +137,7 @@ export async function getPurchaseLists(statuses) {
     .from('purchase_lists')
     .select('*, items:purchase_list_items(*)')
     .order('created_at', { ascending: false })
-
   if (statuses?.length) query = query.in('status', statuses)
-
   const { data, error } = await query
   if (error) throw error
   return data ?? []
@@ -157,7 +152,7 @@ export async function createPurchaseList(supportId, title, requestIds) {
 
   const { data: reqItems, error: itemsErr } = await sb()
     .from('purchase_request_items')
-    .select(`*, purchase_requests!inner(submitted_by, staff!submitted_by(full_name))`)
+    .select('*, purchase_requests!inner(submitted_by, staff!submitted_by(full_name))')
     .in('request_id', requestIds)
   if (itemsErr) throw itemsErr
 
@@ -197,7 +192,11 @@ export async function sendListToSupervisor(listId, supportId) {
 
   const { error } = await sb()
     .from('purchase_lists')
-    .update({ status: 'pending_supervisor', est_total: estTotal, sent_to_supervisor_at: new Date().toISOString() })
+    .update({
+      status: 'pending_supervisor',
+      est_total: estTotal,
+      sent_to_supervisor_at: new Date().toISOString(),
+    })
     .eq('id', listId)
   if (error) throw error
 
