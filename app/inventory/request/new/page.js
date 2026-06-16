@@ -50,8 +50,14 @@ export default function NewRequestPage() {
 
   useEffect(() => {
     const sb = createClient()
-    sb.auth.getSession().then(({ data: { session } }) => {
-      if (session) setStaffId(session.user.id)
+    sb.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) return
+      const { data: staff } = await sb
+        .from('staff')
+        .select('id')
+        .eq('email', session.user.email)
+        .single()
+      if (staff) setStaffId(staff.id)
     })
     getCatalog().then(setCatalog).catch(console.error)
   }, [])
