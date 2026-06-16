@@ -1,11 +1,22 @@
 import './globals.css'
+
 export const metadata = {
   title: 'Oh Hey There — Staff Portal',
   description: 'Employee portal for Oh Hey There',
+  viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
 }
+
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="OHT Staff" />
+        <link rel="apple-touch-icon" href="/OHT_Logo.png" />
+      </head>
       <body>{children}</body>
     </html>
   )
