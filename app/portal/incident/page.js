@@ -38,8 +38,104 @@ const fmtDatetime = s => {
   return d.toLocaleDateString('en-PH', { month:'short', day:'numeric', year:'numeric' })
 }
 
+
+function StaffPicker({ allStaff, selected, onChange, currentStaffId, placeholder }) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+
+  const filtered = allStaff.filter(s => {
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      return `${s.first_name} ${s.last_name} ${s.role || ''}`.toLowerCase().includes(q)
+    }
+    return true
+  })
+
+  function toggle(id) {
+    onChange(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    )
+  }
+
+  function remove(id) { onChange(prev => prev.filter(x => x !== id)) }
+
+  const selectedStaff = allStaff.filter(s => selected.includes(s.id))
+
+  return (
+    <div style={{ position:'relative' }}>
+      {/* Selected pills */}
+      {selectedStaff.length > 0 && (
+        <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:8 }}>
+          {selectedStaff.map(s => (
+            <div key={s.id} style={{ display:'flex', alignItems:'center', gap:5, background:'#fde8ee', border:'1px solid #f5b8ca', borderRadius:20, padding:'4px 10px 4px 10px', fontSize:11, fontWeight:600, color:'#c0392b' }}>
+              <span>{s.first_name} {s.last_name}</span>
+              <button type="button" onClick={() => remove(s.id)}
+                style={{ background:'transparent', border:'none', color:'#c0392b', cursor:'pointer', fontSize:13, lineHeight:1, padding:0, marginLeft:2 }}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Trigger */}
+      <button type="button" onClick={() => setOpen(o => !o)}
+        style={{ width:'100%', background:'white', border:'1px solid #d8cebb', borderRadius:8, padding:'9px 12px', fontSize:12, fontFamily:"'DM Sans',sans-serif", color: selectedStaff.length ? '#1a1208' : '#9a8a7a', textAlign:'left', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center', boxSizing:'border-box' }}>
+        <span>{selectedStaff.length === 0 ? (placeholder || 'Select staff...') : `${selectedStaff.length} selected`}</span>
+        <span style={{ fontSize:10 }}>{open ? '▲' : '▼'}</span>
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:200, background:'white', border:'1px solid #d8cebb', borderRadius:10, boxShadow:'0 8px 24px rgba(0,0,0,.12)', marginTop:4, overflow:'hidden' }}>
+          <div style={{ padding:'8px 10px', borderBottom:'1px solid #f0ede8' }}>
+            <input
+              autoFocus
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search name or role..."
+              style={{ width:'100%', border:'1px solid #d8cebb', borderRadius:7, padding:'7px 10px', fontSize:12, outline:'none', boxSizing:'border-box', fontFamily:"'DM Sans',sans-serif" }}
+            />
+          </div>
+          <div style={{ maxHeight:200, overflowY:'auto' }}>
+            {filtered.length === 0 ? (
+              <div style={{ padding:'12px 14px', fontSize:12, color:'#9a8a7a', textAlign:'center' }}>No staff found</div>
+            ) : filtered.map(s => {
+              const isSelected = selected.includes(s.id)
+              const isSelf = currentStaffId && s.id === currentStaffId
+              return (
+                <div key={s.id} onClick={() => toggle(s.id)}
+                  style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 14px', cursor:'pointer', background: isSelected ? '#fde8ee' : 'white', borderBottom:'1px solid #f8f5f0' }}
+                  onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background='#faf8f5' }}
+                  onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background='white' }}>
+                  <div style={{ width:18, height:18, borderRadius:4, border:`2px solid ${isSelected ? '#EF4576' : '#d8cebb'}`, background: isSelected ? '#EF4576' : 'white', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                    {isSelected && <span style={{ color:'white', fontSize:11, fontWeight:700 }}>✓</span>}
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:12, fontWeight:600, color:'#1a1208' }}>
+                      {s.first_name} {s.last_name}{isSelf ? ' (You)' : ''}
+                    </div>
+                    <div style={{ fontSize:10, color:'#9a8a7a' }}>{s.role || 'Staff'}</div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          <div style={{ padding:'8px 10px', borderTop:'1px solid #f0ede8', display:'flex', justifyContent:'flex-end' }}>
+            <button type="button" onClick={() => setOpen(false)}
+              style={{ background:'#EF4576', color:'white', border:'none', borderRadius:7, padding:'6px 14px', fontSize:11, fontWeight:700, cursor:'pointer' }}>
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function IncidentReportPage() {
   const [staff, setStaff]         = useState(null)
+  const [allStaff, setAllStaff]     = useState([])
+  const [personsSelected, setPersonsSelected] = useState([])
+  const [witnessSelected, setWitnessSelected]  = useState([])
   const [section, setSection]     = useState(1)   // 1 or 2
   const [saving, setSaving]       = useState(false)
   const [toast, setToast]         = useState(null)
@@ -75,6 +171,8 @@ export default function IncidentReportPage() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
       const { data: s } = await supabase.from('staff').select('*').eq('email', session.user.email).single()
+      const { data: allS } = await supabase.from('staff').select('id, first_name, last_name, role').order('first_name')
+      setAllStaff(allS || [])
       if (s) {
         setStaff(s)
         setForm(f => ({ ...f, reported_by: `${s.first_name} ${s.last_name} — ${s.role || ''}` }))
@@ -108,7 +206,7 @@ export default function IncidentReportPage() {
     if (!form.department) { showToast('⚠️', 'Please select your department'); return false }
     if (!form.incident_type) { showToast('⚠️', 'Please select incident type'); return false }
     if (!form.description.trim()) { showToast('⚠️', 'Incident description is required'); return false }
-    if (!form.persons_involved.trim()) { showToast('⚠️', 'Persons involved is required'); return false }
+    if (personsSelected.length === 0) { showToast('⚠️', 'Please select at least one person involved'); return false }
     return true
   }
 
@@ -135,6 +233,10 @@ export default function IncidentReportPage() {
         }
       }
 
+      // Build name strings from selected IDs
+      const personsStr = personsSelected.map(id => { const s = allStaff.find(x => x.id === id); return s ? `${s.first_name} ${s.last_name} (${s.role || 'Staff'})` : id }).join(', ')
+      const witnessStr = witnessSelected.map(id => { const s = allStaff.find(x => x.id === id); return s ? `${s.first_name} ${s.last_name} (${s.role || 'Staff'})` : id }).join(', ')
+
       const { error } = await supabase.from('incident_reports').insert([{
         staff_id: staff?.id || null,
         date_of_report: form.date_of_report,
@@ -143,8 +245,8 @@ export default function IncidentReportPage() {
         department: form.department,
         incident_type: form.incident_type,
         description: form.description,
-        persons_involved: form.persons_involved,
-        witnesses: form.witnesses || null,
+        persons_involved: personsStr,
+        witnesses: witnessStr || null,
         resolution: form.resolution || null,
         photo_url,
         declaration_name: form.declaration_name,
@@ -187,6 +289,8 @@ export default function IncidentReportPage() {
       setSection(1)
       setPhotoFile(null)
       setPhotoPreview(null)
+      setPersonsSelected([])
+      setWitnessSelected([])
       setForm({
         date_of_report: today,
         time_of_report: nowTime,
@@ -333,16 +437,23 @@ export default function IncidentReportPage() {
 
                   <div style={{ marginBottom:14 }}>
                     <label style={labelStyle}>Persons Involved{requiredStar}</label>
-                    <textarea value={form.persons_involved} onChange={fv('persons_involved')} rows={3}
-                      placeholder="List all persons involved..."
-                      style={{ ...iStyle, resize:'vertical' }} />
+                    <StaffPicker
+                      allStaff={allStaff}
+                      selected={personsSelected}
+                      onChange={setPersonsSelected}
+                      currentStaffId={staff?.id}
+                      placeholder="Select staff members involved..."
+                    />
                   </div>
 
                   <div style={{ marginBottom:14 }}>
                     <label style={labelStyle}>Witnesses (if any)</label>
-                    <textarea value={form.witnesses} onChange={fv('witnesses')} rows={2}
-                      placeholder="List any witnesses..."
-                      style={{ ...iStyle, resize:'vertical' }} />
+                    <StaffPicker
+                      allStaff={allStaff}
+                      selected={witnessSelected}
+                      onChange={setWitnessSelected}
+                      placeholder="Select witnesses..."
+                    />
                   </div>
 
                   <div style={{ marginBottom:14 }}>
