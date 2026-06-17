@@ -5,8 +5,8 @@ import PortalShell from '../../../components/PortalShell'
 import { createClient } from '../../../lib/supabase'
 import { notifyAdmins } from '../../../lib/notify'
 
-const CATEGORIES = ['All','Contract','NDA','Government Forms','Performance Reviews','Training Materials','General']
-const CAT_COLORS = {'Contract':'#4a7a1e','NDA':'#c0392b','Government Forms':'#2d5a8a','Performance Reviews':'#8e44ad','Training Materials':'#a06000','General':'#7a6a50'}
+const CATEGORIES = ['All','Contract','NDA','Government Forms','Performance Reviews','Training Materials','Incident Report','General']
+const CAT_COLORS = {'Contract':'#4a7a1e','NDA':'#c0392b','Government Forms':'#2d5a8a','Performance Reviews':'#8e44ad','Training Materials':'#a06000','General':'#7a6a50','Incident Report':'#c0392b'}
 const fmtDate = d => d ? new Date(d).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'}) : '—'
 
 export default function MyFiles() {
