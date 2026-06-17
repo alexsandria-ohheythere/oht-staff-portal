@@ -68,6 +68,7 @@ export default function PortalShell({ children }) {
     { href: '/portal/overtime',           icon: '⏰', label: 'Request Overtime' },
 
     { type: 'section', label: 'My Documents' },
+    { href: '/portal/profile',            icon: '👤', label: 'My Profile' },
     { href: '/portal/payslip',            icon: '💸', label: 'My Payslips' },
     { href: '/portal/contracts',          icon: '📄', label: 'My Contracts', badge: pendingContracts },
     { href: '/portal/files',              icon: '📁', label: 'My Files · 201' },
@@ -104,6 +105,11 @@ export default function PortalShell({ children }) {
         <div style={{ margin:'12px 12px 4px', background:'rgba(255,255,255,.15)', borderRadius:10, padding:'10px 12px' }}>
           <div style={{ fontSize:12, fontWeight:600, color:'white' }}>{name}</div>
           <div style={{ fontSize:9, color:'rgba(255,255,255,.6)', marginTop:1 }}>{role || 'Staff'}</div>
+          <a href="/portal/profile"
+            onClick={() => setDrawerOpen(false)}
+            style={{ display:'inline-block', marginTop:8, fontSize:10, fontWeight:700, color:'#EF4576', background:'white', borderRadius:6, padding:'4px 10px', textDecoration:'none', letterSpacing:0.3 }}>
+            View My Profile →
+          </a>
         </div>
       )}
 
