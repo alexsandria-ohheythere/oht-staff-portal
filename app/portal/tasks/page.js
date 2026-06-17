@@ -42,7 +42,22 @@ export default function MyTasks() {
   const today = toISO(new Date())
   const todayLabel = new Date().toLocaleDateString('en-PH',{weekday:'long',month:'long',day:'numeric',year:'numeric'})
 
-  useEffect(() => { init() }, [])
+  useEffect(() => {
+    init()
+  }, [])
+
+  useEffect(() => {
+    if (!staff) return
+    const supabase = createClient()
+    const channel = supabase
+      .channel(`staff-checkin-realtime-${staff.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_task_assignments', filter: `staff_id=eq.${staff.id}` }, () => {
+        const s2 = createClient()
+        loadData(s2, staff.id)
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [staff?.id])
 
   async function init() {
     try {
