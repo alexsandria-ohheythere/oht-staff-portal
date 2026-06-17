@@ -107,7 +107,7 @@ export default function MyTasks() {
       const [{ data: t, error: tErr }, { data: sh, error: shErr }] = await Promise.all([
         supabase
           .from('shift_task_assignments')
-          .select('*, role_tasks!shift_task_assignments_task_id_fkey(task_name)')
+          .select('*, role_tasks!shift_task_assignments_task_id_fkey(task_name, category)')
           .eq('staff_id', staffId)
           .eq('shift_date', today)
           .order('created_at'),
@@ -274,28 +274,45 @@ export default function MyTasks() {
                       {shiftComplete && <span style={{ fontSize:16 }}>✅</span>}
                     </div>
                   </div>
-                  {shiftTasks.map((t, idx) => (
-                    <div key={t.id}
-                      onClick={() => saving !== t.id && toggleTask(t.id, !t.completed)}
-                      style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: idx < shiftTasks.length-1 ? '1px solid #f0ede8' : 'none', background: t.completed?'#f8fdf5':'white', cursor:'pointer', transition:'background .15s', userSelect:'none' }}
-                      onMouseEnter={e=>{ if(!t.completed) e.currentTarget.style.background='#fafafa' }}
-                      onMouseLeave={e=>{ e.currentTarget.style.background = t.completed?'#f8fdf5':'white' }}>
-                      <div style={{ width:26, height:26, borderRadius:'50%', border:`2.5px solid ${t.completed?'#7ab648':ss.border}`, background:t.completed?'#7ab648':'transparent', display:'flex', alignItems:'center', justifyContent:'center', transition:'all .2s', flexShrink:0, opacity:saving===t.id?.5:1 }}>
-                        {t.completed && <span style={{ color:'white', fontSize:13, fontWeight:700 }}>✓</span>}
-                      </div>
-                      <div style={{ flex:1 }}>
-                        <div style={{ fontSize:13, fontWeight:t.completed?400:600, color:t.completed?'#7a6a50':'#1a1208', textDecoration:t.completed?'line-through':'none', transition:'all .2s' }}>
-                          {t.role_tasks?.task_name || 'Task'}
+                  {(() => {
+                    const grouped = {}
+                    shiftTasks.forEach(t => {
+                      const cat = t.role_tasks?.category || 'General'
+                      if (!grouped[cat]) grouped[cat] = []
+                      grouped[cat].push(t)
+                    })
+                    return Object.entries(grouped).map(([cat, catTasks]) => (
+                      <div key={cat}>
+                        <div style={{ padding:'6px 18px', background:'#f7f4f0', borderBottom:'1px solid #f0ede8', display:'flex', alignItems:'center', gap:8 }}>
+                          <div style={{ width:3, height:12, borderRadius:2, background:ss.border }}></div>
+                          <span style={{ fontSize:9, fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', color:ss.color }}>{cat}</span>
+                          <span style={{ fontSize:9, color:'#7a6a50', marginLeft:2 }}>{catTasks.filter(t=>t.completed).length}/{catTasks.length}</span>
                         </div>
-                        {t.completed && t.completed_at && (
-                          <div style={{ fontSize:10, color:'#4a7a1e', marginTop:2, fontFamily:"'DM Mono',monospace", fontWeight:600 }}>
-                            ✓ Done at {fmtTime(t.completed_at)}
+                        {catTasks.map((t, idx) => (
+                          <div key={t.id}
+                            onClick={() => saving !== t.id && toggleTask(t.id, !t.completed)}
+                            style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: idx < catTasks.length-1 ? '1px solid #f0ede8' : 'none', background: t.completed?'#f8fdf5':'white', cursor:'pointer', transition:'background .15s', userSelect:'none' }}
+                            onMouseEnter={e=>{ if(!t.completed) e.currentTarget.style.background='#fafafa' }}
+                            onMouseLeave={e=>{ e.currentTarget.style.background = t.completed?'#f8fdf5':'white' }}>
+                            <div style={{ width:26, height:26, borderRadius:'50%', border:`2.5px solid ${t.completed?'#7ab648':ss.border}`, background:t.completed?'#7ab648':'transparent', display:'flex', alignItems:'center', justifyContent:'center', transition:'all .2s', flexShrink:0, opacity:saving===t.id?.5:1 }}>
+                              {t.completed && <span style={{ color:'white', fontSize:13, fontWeight:700 }}>✓</span>}
+                            </div>
+                            <div style={{ flex:1 }}>
+                              <div style={{ fontSize:13, fontWeight:t.completed?400:600, color:t.completed?'#7a6a50':'#1a1208', textDecoration:t.completed?'line-through':'none', transition:'all .2s' }}>
+                                {t.role_tasks?.task_name || 'Task'}
+                              </div>
+                              {t.completed && t.completed_at && (
+                                <div style={{ fontSize:10, color:'#4a7a1e', marginTop:2, fontFamily:"'DM Mono',monospace", fontWeight:600 }}>
+                                  ✓ Done at {fmtTime(t.completed_at)}
+                                </div>
+                              )}
+                            </div>
+                            {!t.completed && <div style={{ fontSize:10, color:'#d8cebb' }}>tap</div>}
                           </div>
-                        )}
+                        ))}
                       </div>
-                      {!t.completed && <div style={{ fontSize:10, color:'#d8cebb' }}>tap</div>}
-                    </div>
-                  ))}
+                    ))
+                  })()}
                 </div>
               )
             })}
