@@ -4,7 +4,19 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
 import PortalShell from '../../../components/PortalShell'
 import { createClient } from '../../../lib/supabase'
-import { getDailyRate } from '../../../lib/payroll'
+
+function getDailyRate(employment_type, role, overrideRates) {
+  const source = overrideRates || {}
+  const entry = source[employment_type]?.[role]
+  if (entry?.type === 'daily' && entry.amount) return entry.amount
+  if (entry?.type === 'monthly' && entry.amount) return Math.round(entry.amount / 26)
+  // fallback defaults
+  const DEFAULTS = {
+    'Part-time':  { 'Senior Barista':850,'Executive Chef':850,'Junior Barista - Milk Station':700,'Junior Barista - Cashier':700,'Sous Chef':700,'Kitchen Staff':700 },
+    'Freelancer': { 'Cafe Supervisor':1150,'Cafe Operations Support':750,'Senior Barista':850,'Executive Chef':850,'Junior Barista - Milk Station':700,'Junior Barista - Cashier':700,'Sous Chef':700,'Kitchen Staff':700 },
+  }
+  return DEFAULTS[employment_type]?.[role] || 0
+}
 
 const peso = n => n != null && n > 0 ? `₱ ${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'
 const ROLE_COLORS = {
