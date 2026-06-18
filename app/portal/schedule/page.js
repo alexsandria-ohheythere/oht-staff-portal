@@ -69,6 +69,7 @@ export default function MySchedulePage() {
       .select('*')
       .eq('staff_id', staffId)
       .eq('week_start', weekStart)
+      .eq('published', true)
       .order('shift_date')
     setMyShifts(data || [])
     setLoading(false)
@@ -182,9 +183,6 @@ export default function MySchedulePage() {
                       </div>
                       <p style={{ fontSize:12, color:'#6b7280', margin:'2px 0 0' }}>{sh.time}</p>
                     </div>
-                    {!s.published && (
-                      <span style={{ fontSize:10, color:'#92400e', background:'#fef3c7', padding:'2px 8px', borderRadius:8, fontWeight:600 }}>Draft</span>
-                    )}
                   </div>
                 )
               })}
