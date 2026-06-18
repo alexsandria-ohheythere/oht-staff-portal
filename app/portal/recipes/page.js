@@ -4,33 +4,43 @@ import { useState, useEffect } from 'react'
 import PortalShell from '../../../components/PortalShell'
 import { createClient } from '../../../lib/supabase'
 
-// Role → which categories they can see
-// junior_visible = true recipes are visible to junior roles
+const SETTINGS_KEY = 'recipe_categories'
+
+const PALETTE = [
+  { bg: '#e8f4fd', text: '#2563eb', border: '#bfdbfe' },
+  { bg: '#fef3c7', text: '#d97706', border: '#fde68a' },
+  { bg: '#fce7f3', text: '#db2777', border: '#fbcfe8' },
+  { bg: '#f3f4f6', text: '#6b7280', border: '#e5e7eb' },
+  { bg: '#d1fae5', text: '#065f46', border: '#a7f3d0' },
+  { bg: '#ede9fe', text: '#7c3aed', border: '#ddd6fe' },
+  { bg: '#fee2e2', text: '#dc2626', border: '#fecaca' },
+  { bg: '#fef9c3', text: '#ca8a04', border: '#fef08a' },
+]
+
+// Roles: categories they can see, and whether limited to junior_visible only
 const ROLE_ACCESS = {
-  // All recipes
-  'Cafe Supervisor': { categories: ['Bar', 'Kitchen', 'Pastry', 'Other'], juniorOnly: false },
-  'Cafe Operations Support': { categories: ['Bar', 'Kitchen', 'Pastry', 'Other'], juniorOnly: false },
-  // Bar
-  'Senior Barista': { categories: ['Bar', 'Pastry', 'Other'], juniorOnly: false },
-  'Junior Barista - Milk Station': { categories: ['Bar', 'Pastry', 'Other'], juniorOnly: true },
-  'Junior Barista - Cashier': { categories: ['Bar', 'Pastry', 'Other'], juniorOnly: true },
-  // Kitchen
-  'Executive Chef': { categories: ['Kitchen', 'Pastry', 'Other'], juniorOnly: false },
-  'Sous Chef': { categories: ['Kitchen', 'Pastry', 'Other'], juniorOnly: true },
-  'Kitchen Staff': { categories: ['Kitchen', 'Pastry', 'Other'], juniorOnly: true },
+  'Cafe Supervisor':              { juniorOnly: false },
+  'Cafe Operations Support':      { juniorOnly: false },
+  'Senior Barista':               { tags: ['bar'], juniorOnly: false },
+  'Junior Barista - Milk Station':{ tags: ['bar'], juniorOnly: true },
+  'Junior Barista - Cashier':     { tags: ['bar'], juniorOnly: true },
+  'Executive Chef':               { tags: ['kitchen'], juniorOnly: false },
+  'Sous Chef':                    { tags: ['kitchen'], juniorOnly: true },
+  'Kitchen Staff':                { tags: ['kitchen'], juniorOnly: true },
 }
 
-const CATEGORY_COLORS = {
-  Bar: { bg: '#e8f4fd', text: '#2563eb', border: '#bfdbfe' },
-  Kitchen: { bg: '#fef3c7', text: '#d97706', border: '#fde68a' },
-  Pastry: { bg: '#fce7f3', text: '#db2777', border: '#fbcfe8' },
-  Other: { bg: '#f3f4f6', text: '#6b7280', border: '#e5e7eb' },
+// Match category names to tags (bar / kitchen) by checking lowercase name
+function catMatchesTags(catName, tags) {
+  if (!tags || tags.length === 0) return true // no restriction = all categories
+  const lower = catName.toLowerCase()
+  return tags.some(tag => lower.includes(tag))
 }
 
-function CategoryBadge({ cat }) {
-  const c = CATEGORY_COLORS[cat] || CATEGORY_COLORS.Other
+function CategoryBadge({ cat, categories }) {
+  const found = categories.find(c => c.name === cat)
+  const c = found ? PALETTE[found.colorIdx % PALETTE.length] : PALETTE[3]
   return (
-    <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 20, background: c.bg, color: c.text, border: `1px solid ${c.border}` }}>
+    <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 20, background: c.bg, color: c.text, border: `1px solid ${c.border}`, whiteSpace: 'nowrap' }}>
       {cat}
     </span>
   )
@@ -54,6 +64,7 @@ function Modal({ open, onClose, title, children }) {
 export default function PortalRecipesPage() {
   const supabase = createClient()
   const [staffRole, setStaffRole] = useState(null)
+  const [categories, setCategories] = useState([])
   const [recipes, setRecipes] = useState([])
   const [loading, setLoading] = useState(true)
   const [access, setAccess] = useState(null)
@@ -79,13 +90,27 @@ export default function PortalRecipesPage() {
       const acc = ROLE_ACCESS[role] || null
       setAccess(acc)
 
+      // Load categories from settings
+      let cats = []
+      const { data: settingsData } = await supabase.from('settings').select('value').eq('key', SETTINGS_KEY).single()
+      if (settingsData?.value) {
+        try { cats = JSON.parse(settingsData.value) } catch {}
+      }
+      setCategories(cats)
+
       if (!acc) { setLoading(false); return }
 
-      let query = supabase
-        .from('recipes')
-        .select('*')
-        .eq('is_active', true)
-        .in('category', acc.categories)
+      // Determine which category names this role can see
+      const allowedCats = cats.length > 0
+        ? cats.map(c => c.name).filter(name => catMatchesTags(name, acc.tags))
+        : []
+
+      let query = supabase.from('recipes').select('*').eq('is_active', true)
+
+      if (allowedCats.length > 0) {
+        query = query.in('category', allowedCats)
+      }
+      // Supervisor / Ops Support: no category restriction (acc.tags undefined)
 
       if (acc.juniorOnly) {
         query = query.eq('junior_visible', true)
@@ -100,7 +125,7 @@ export default function PortalRecipesPage() {
 
   const filtered = recipes.filter(r => {
     if (filterCat !== 'All' && r.category !== filterCat) return false
-    if (search && !`${r.name} ${r.description}`.toLowerCase().includes(search.toLowerCase())) return false
+    if (search && !`${r.name} ${r.description || ''}`.toLowerCase().includes(search.toLowerCase())) return false
     return true
   })
 
@@ -120,7 +145,7 @@ export default function PortalRecipesPage() {
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: 12, fontFamily: "'DM Sans',sans-serif" }}>
           <div style={{ fontSize: 40 }}>📒</div>
           <div style={{ fontFamily: "'Montserrat',sans-serif", fontSize: 18, fontWeight: 700, color: '#111827' }}>No Recipes Available</div>
-          <div style={{ fontSize: 13, color: '#9ca3af', textAlign: 'center', maxWidth: 300 }}>Recipes are not yet configured for your role ({staffRole || 'Unknown'}). Please contact your manager.</div>
+          <div style={{ fontSize: 13, color: '#9ca3af', textAlign: 'center', maxWidth: 300 }}>Recipes are not configured for your role ({staffRole || 'Unknown'}). Please contact your manager.</div>
         </div>
       </PortalShell>
     )
@@ -133,8 +158,7 @@ export default function PortalRecipesPage() {
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontFamily: "'Montserrat',sans-serif", fontSize: 20, fontWeight: 800, color: '#111827' }}>📒 Recipes</div>
           <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 3 }}>
-            {access.categories.join(', ')} recipes
-            {access.juniorOnly ? ' · Selected recipes only' : ' · All recipes'}
+            {access.juniorOnly ? 'Selected recipes for your role' : 'All recipes for your role'}
           </div>
         </div>
 
@@ -157,24 +181,46 @@ export default function PortalRecipesPage() {
           )}
         </div>
 
+        {/* Category pills */}
+        {availableCategories.length > 1 && (
+          <div style={{ display: 'flex', gap: 7, marginBottom: 18, flexWrap: 'wrap' }}>
+            <button onClick={() => setFilterCat('All')} style={{ fontSize: 11, fontWeight: filterCat === 'All' ? 700 : 500, padding: '5px 12px', borderRadius: 20, border: filterCat === 'All' ? '2px solid #ef4576' : '1px solid #e5e7eb', background: filterCat === 'All' ? '#fdf2f5' : 'white', color: filterCat === 'All' ? '#ef4576' : '#9ca3af', cursor: 'pointer', fontFamily: "'DM Sans',sans-serif" }}>
+              All ({recipes.length})
+            </button>
+            {availableCategories.map(cat => {
+              const count = recipes.filter(r => r.category === cat).length
+              const active = filterCat === cat
+              const found = categories.find(c => c.name === cat)
+              const p = found ? PALETTE[found.colorIdx % PALETTE.length] : PALETTE[3]
+              return (
+                <button key={cat} onClick={() => setFilterCat(active ? 'All' : cat)}
+                  style={{ fontSize: 11, fontWeight: active ? 700 : 500, padding: '5px 12px', borderRadius: 20, border: active ? `2px solid ${p.text}` : `1px solid ${p.border}`, background: active ? p.bg : 'white', color: active ? p.text : '#9ca3af', cursor: 'pointer', fontFamily: "'DM Sans',sans-serif" }}>
+                  {cat} ({count})
+                </button>
+              )
+            })}
+          </div>
+        )}
+
         {filtered.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af', fontSize: 14 }}>No recipes found.</div>
         ) : (
           <div style={{ display: 'grid', gap: 12 }}>
             {filtered.map(r => (
-              <div key={r.id} onClick={() => setViewRecipe(r)} style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 18px', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,.06)', transition: 'box-shadow .15s' }}
+              <div key={r.id} onClick={() => setViewRecipe(r)}
+                style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 18px', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,.06)', transition: 'box-shadow .15s' }}
                 onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,.12)'}
                 onMouseLeave={e => e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,.06)'}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
                   <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', lineHeight: 1.3 }}>{r.name}</div>
-                  <CategoryBadge cat={r.category} />
+                  <CategoryBadge cat={r.category} categories={categories} />
                 </div>
                 {r.description && <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10, lineHeight: 1.5 }}>{r.description.length > 100 ? r.description.slice(0, 100) + '…' : r.description}</div>}
                 <div style={{ display: 'flex', gap: 14, fontSize: 12, color: '#9ca3af', flexWrap: 'wrap' }}>
                   {r.serving_size && <span>🍽 {r.serving_size}</span>}
                   {r.prep_time && <span>⏱ {r.prep_time}</span>}
-                  {Array.isArray(r.ingredients) && r.ingredients.length > 0 && <span>🧂 {r.ingredients.length} ingredients</span>}
-                  {Array.isArray(r.steps) && r.steps.length > 0 && <span>📋 {r.steps.length} steps</span>}
+                  {Array.isArray(r.ingredients) && r.ingredients.length > 0 && <span>🧂 {r.ingredients.length} ingredient{r.ingredients.length !== 1 ? 's' : ''}</span>}
+                  {Array.isArray(r.steps) && r.steps.length > 0 && <span>📋 {r.steps.length} step{r.steps.length !== 1 ? 's' : ''}</span>}
                 </div>
               </div>
             ))}
@@ -186,13 +232,11 @@ export default function PortalRecipesPage() {
           {viewRecipe && (
             <div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
-                <CategoryBadge cat={viewRecipe.category} />
+                <CategoryBadge cat={viewRecipe.category} categories={categories} />
                 {viewRecipe.serving_size && <span style={{ fontSize: 12, color: '#9ca3af' }}>🍽 {viewRecipe.serving_size}</span>}
                 {viewRecipe.prep_time && <span style={{ fontSize: 12, color: '#9ca3af' }}>⏱ {viewRecipe.prep_time}</span>}
               </div>
-
               {viewRecipe.description && <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 18, lineHeight: 1.6 }}>{viewRecipe.description}</p>}
-
               {Array.isArray(viewRecipe.ingredients) && viewRecipe.ingredients.length > 0 && (
                 <div style={{ marginBottom: 18 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#9ca3af', marginBottom: 10 }}>Ingredients</div>
@@ -206,7 +250,6 @@ export default function PortalRecipesPage() {
                   </div>
                 </div>
               )}
-
               {Array.isArray(viewRecipe.steps) && viewRecipe.steps.length > 0 && (
                 <div style={{ marginBottom: 10 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#9ca3af', marginBottom: 10 }}>Preparation</div>
@@ -217,7 +260,6 @@ export default function PortalRecipesPage() {
                   </ol>
                 </div>
               )}
-
               <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid #e5e7eb' }}>
                 <button onClick={() => setViewRecipe(null)} style={{ padding: '9px 20px', borderRadius: 9, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, background: '#ef4576', color: 'white', fontFamily: "'DM Sans',sans-serif" }}>Close</button>
               </div>
