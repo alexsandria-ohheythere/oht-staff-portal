@@ -56,11 +56,6 @@ export default function PortalShell({ children }) {
       { href: '/portal/cashout',          icon: '🧾', label: 'Cashout Entry' },
     ] : []),
 
-    { type: 'section', label: 'Inventory' },
-    { href: '/inventory/my-requests', icon: '🚩', label: 'Running Low Request' },
-    { href: '/inventory/daily',       icon: '📋', label: 'Daily Inventory' },
-    { href: '/inventory/my-reports',  icon: '📊', label: 'My Reports' },
-    
     { type: 'section', label: 'Forms' },
     { href: '/portal/incident',           icon: '⚠️', label: 'Incident Report' },
     { href: '/portal/wastage',            icon: '🗑️', label: 'Wastage Report' },
