@@ -7,17 +7,16 @@ import { createClient } from '../../../lib/supabase'
 const SETTINGS_KEY = 'recipe_categories'
 
 const PALETTE = [
-  { bg: '#e8f4fd', text: '#2563eb', border: '#bfdbfe' },
-  { bg: '#fef3c7', text: '#d97706', border: '#fde68a' },
-  { bg: '#fce7f3', text: '#db2777', border: '#fbcfe8' },
-  { bg: '#f3f4f6', text: '#6b7280', border: '#e5e7eb' },
-  { bg: '#d1fae5', text: '#065f46', border: '#a7f3d0' },
-  { bg: '#ede9fe', text: '#7c3aed', border: '#ddd6fe' },
-  { bg: '#fee2e2', text: '#dc2626', border: '#fecaca' },
-  { bg: '#fef9c3', text: '#ca8a04', border: '#fef08a' },
+  { bg: '#e8f4fd', text: '#1e40af', dot: '#2563eb', border: '#bfdbfe' },
+  { bg: '#fef3c7', text: '#b45309', dot: '#d97706', border: '#fde68a' },
+  { bg: '#fce7f3', text: '#9d174d', dot: '#db2777', border: '#fbcfe8' },
+  { bg: '#f3f4f6', text: '#4b5563', dot: '#6b7280', border: '#e5e7eb' },
+  { bg: '#d1fae5', text: '#065f46', dot: '#10b981', border: '#a7f3d0' },
+  { bg: '#ede9fe', text: '#5b21b6', dot: '#7c3aed', border: '#ddd6fe' },
+  { bg: '#fee2e2', text: '#991b1b', dot: '#dc2626', border: '#fecaca' },
+  { bg: '#fef9c3', text: '#854d0e', dot: '#ca8a04', border: '#fef08a' },
 ]
 
-// Roles: categories they can see, and whether limited to junior_visible only
 const ROLE_ACCESS = {
   'Cafe Supervisor':              { juniorOnly: false },
   'Cafe Operations Support':      { juniorOnly: false },
@@ -29,21 +28,10 @@ const ROLE_ACCESS = {
   'Kitchen Staff':                { tags: ['kitchen'], juniorOnly: true },
 }
 
-// Match category names to tags (bar / kitchen) by checking lowercase name
 function catMatchesTags(catName, tags) {
-  if (!tags || tags.length === 0) return true // no restriction = all categories
+  if (!tags || tags.length === 0) return true
   const lower = catName.toLowerCase()
   return tags.some(tag => lower.includes(tag))
-}
-
-function CategoryBadge({ cat, categories }) {
-  const found = categories.find(c => c.name === cat)
-  const c = found ? PALETTE[found.colorIdx % PALETTE.length] : PALETTE[3]
-  return (
-    <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 20, background: c.bg, color: c.text, border: `1px solid ${c.border}`, whiteSpace: 'nowrap' }}>
-      {cat}
-    </span>
-  )
 }
 
 function Modal({ open, onClose, title, children }) {
@@ -63,14 +51,14 @@ function Modal({ open, onClose, title, children }) {
 
 export default function PortalRecipesPage() {
   const supabase = createClient()
-  const [staffRole, setStaffRole] = useState(null)
   const [categories, setCategories] = useState([])
   const [recipes, setRecipes] = useState([])
   const [loading, setLoading] = useState(true)
   const [access, setAccess] = useState(null)
+  const [staffRole, setStaffRole] = useState('')
 
+  const [expandedCats, setExpandedCats] = useState({})
   const [search, setSearch] = useState('')
-  const [filterCat, setFilterCat] = useState('All')
   const [viewRecipe, setViewRecipe] = useState(null)
 
   useEffect(() => {
@@ -78,65 +66,48 @@ export default function PortalRecipesPage() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) { setLoading(false); return }
 
-      const { data: staff } = await supabase
-        .from('staff')
-        .select('role')
-        .eq('email', session.user.email)
-        .single()
-
+      const { data: staff } = await supabase.from('staff').select('role').eq('email', session.user.email).single()
       const role = staff?.role || ''
       setStaffRole(role)
 
       const acc = ROLE_ACCESS[role] || null
       setAccess(acc)
 
-      // Load categories from settings
-      let cats = []
       const { data: settingsData } = await supabase.from('settings').select('value').eq('key', SETTINGS_KEY).single()
+      let cats = []
       if (settingsData?.value) {
         try { cats = JSON.parse(settingsData.value) } catch {}
       }
-      setCategories(cats)
 
       if (!acc) { setLoading(false); return }
 
-      // Determine which category names this role can see
-      const allowedCats = cats.length > 0
-        ? cats.map(c => c.name).filter(name => catMatchesTags(name, acc.tags))
-        : []
+      // Filter cats by role tags
+      const allowedCats = cats.filter(c => catMatchesTags(c.name, acc.tags))
+      setCategories(allowedCats)
 
-      let query = supabase.from('recipes').select('*').eq('is_active', true)
+      if (allowedCats.length === 0) { setLoading(false); return }
 
-      if (allowedCats.length > 0) {
-        query = query.in('category', allowedCats)
-      }
-      // Supervisor / Ops Support: no category restriction (acc.tags undefined)
+      const allowedCatNames = allowedCats.map(c => c.name)
+      let query = supabase.from('recipes').select('*').eq('is_active', true).in('category', allowedCatNames)
+      if (acc.juniorOnly) query = query.eq('junior_visible', true)
 
-      if (acc.juniorOnly) {
-        query = query.eq('junior_visible', true)
-      }
-
-      const { data } = await query.order('category').order('name')
+      const { data } = await query.order('category').order('subcategory').order('name')
       setRecipes(data || [])
       setLoading(false)
     }
     init()
   }, [])
 
-  const filtered = recipes.filter(r => {
-    if (filterCat !== 'All' && r.category !== filterCat) return false
-    if (search && !`${r.name} ${r.description || ''}`.toLowerCase().includes(search.toLowerCase())) return false
-    return true
-  })
+  function toggleCat(catName) {
+    setExpandedCats(prev => ({ ...prev, [catName]: !prev[catName] }))
+  }
 
-  const availableCategories = [...new Set(recipes.map(r => r.category))]
+  const filtered = recipes.filter(r =>
+    !search || `${r.name} ${r.subcategory || ''} ${r.description || ''}`.toLowerCase().includes(search.toLowerCase())
+  )
 
   if (loading) {
-    return (
-      <PortalShell>
-        <div style={{ textAlign: 'center', padding: 80, color: '#9ca3af', fontFamily: "'DM Sans',sans-serif" }}>Loading recipes…</div>
-      </PortalShell>
-    )
+    return <PortalShell><div style={{ textAlign: 'center', padding: 80, color: '#9ca3af', fontFamily: "'DM Sans',sans-serif" }}>Loading recipes…</div></PortalShell>
   }
 
   if (!access) {
@@ -145,7 +116,7 @@ export default function PortalRecipesPage() {
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: 12, fontFamily: "'DM Sans',sans-serif" }}>
           <div style={{ fontSize: 40 }}>📒</div>
           <div style={{ fontFamily: "'Montserrat',sans-serif", fontSize: 18, fontWeight: 700, color: '#111827' }}>No Recipes Available</div>
-          <div style={{ fontSize: 13, color: '#9ca3af', textAlign: 'center', maxWidth: 300 }}>Recipes are not configured for your role ({staffRole || 'Unknown'}). Please contact your manager.</div>
+          <div style={{ fontSize: 13, color: '#9ca3af', textAlign: 'center', maxWidth: 300 }}>Recipes are not configured for your role ({staffRole || 'Unknown'}). Contact your manager.</div>
         </div>
       </PortalShell>
     )
@@ -154,117 +125,135 @@ export default function PortalRecipesPage() {
   return (
     <PortalShell>
       <div style={{ padding: '20px 18px', fontFamily: "'DM Sans',sans-serif", maxWidth: 700, margin: '0 auto' }}>
-        {/* Header */}
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontFamily: "'Montserrat',sans-serif", fontSize: 20, fontWeight: 800, color: '#111827' }}>📒 Recipes</div>
-          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 3 }}>
-            {access.juniorOnly ? 'Selected recipes for your role' : 'All recipes for your role'}
-          </div>
+          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 3 }}>{access.juniorOnly ? 'Selected recipes for your role' : 'All recipes for your role'}</div>
         </div>
 
-        {/* Filters */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-          <input
-            style={{ flex: 1, minWidth: 180, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '9px 12px', fontSize: 13, fontFamily: "'DM Sans',sans-serif", outline: 'none' }}
-            placeholder="🔍  Search…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-          {availableCategories.length > 1 && (
-            <select
-              style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '9px 12px', fontSize: 13, fontFamily: "'DM Sans',sans-serif", outline: 'none' }}
-              value={filterCat}
-              onChange={e => setFilterCat(e.target.value)}>
-              <option value="All">All</option>
-              {availableCategories.map(c => <option key={c}>{c}</option>)}
-            </select>
-          )}
-        </div>
+        <input
+          style={{ width: '100%', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '9px 12px', fontSize: 13, fontFamily: "'DM Sans',sans-serif", outline: 'none', boxSizing: 'border-box', marginBottom: 18 }}
+          placeholder="🔍  Search recipes…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
 
-        {/* Category pills */}
-        {availableCategories.length > 1 && (
-          <div style={{ display: 'flex', gap: 7, marginBottom: 18, flexWrap: 'wrap' }}>
-            <button onClick={() => setFilterCat('All')} style={{ fontSize: 11, fontWeight: filterCat === 'All' ? 700 : 500, padding: '5px 12px', borderRadius: 20, border: filterCat === 'All' ? '2px solid #ef4576' : '1px solid #e5e7eb', background: filterCat === 'All' ? '#fdf2f5' : 'white', color: filterCat === 'All' ? '#ef4576' : '#9ca3af', cursor: 'pointer', fontFamily: "'DM Sans',sans-serif" }}>
-              All ({recipes.length})
-            </button>
-            {availableCategories.map(cat => {
-              const count = recipes.filter(r => r.category === cat).length
-              const active = filterCat === cat
-              const found = categories.find(c => c.name === cat)
-              const p = found ? PALETTE[found.colorIdx % PALETTE.length] : PALETTE[3]
-              return (
-                <button key={cat} onClick={() => setFilterCat(active ? 'All' : cat)}
-                  style={{ fontSize: 11, fontWeight: active ? 700 : 500, padding: '5px 12px', borderRadius: 20, border: active ? `2px solid ${p.text}` : `1px solid ${p.border}`, background: active ? p.bg : 'white', color: active ? p.text : '#9ca3af', cursor: 'pointer', fontFamily: "'DM Sans',sans-serif" }}>
-                  {cat} ({count})
-                </button>
-              )
-            })}
-          </div>
-        )}
+        {/* Category accordion columns */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16, alignItems: 'start' }}>
+          {categories.map(cat => {
+            const p = PALETTE[cat.colorIdx % PALETTE.length]
+            const isExpanded = !!expandedCats[cat.name]
+            const catRecipes = filtered.filter(r => r.category === cat.name)
 
-        {filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af', fontSize: 14 }}>No recipes found.</div>
-        ) : (
-          <div style={{ display: 'grid', gap: 12 }}>
-            {filtered.map(r => (
-              <div key={r.id} onClick={() => setViewRecipe(r)}
-                style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 18px', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,.06)', transition: 'box-shadow .15s' }}
-                onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,.12)'}
-                onMouseLeave={e => e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,.06)'}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
-                  <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', lineHeight: 1.3 }}>{r.name}</div>
-                  <CategoryBadge cat={r.category} categories={categories} />
+            return (
+              <div key={cat.name} style={{ background: 'white', border: `1px solid ${isExpanded ? p.border : '#e5e7eb'}`, borderRadius: 16, overflow: 'hidden', transition: 'border-color .2s' }}>
+
+                {/* Category header */}
+                <div onClick={() => toggleCat(cat.name)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', cursor: 'pointer', background: isExpanded ? p.bg : 'transparent', transition: 'background .2s', userSelect: 'none' }}>
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: p.dot, flexShrink: 0 }} />
+                  <span style={{ fontWeight: 700, fontSize: 14, color: isExpanded ? p.text : '#111827', flex: 1 }}>{cat.name}</span>
+                  <span style={{ fontSize: 11, color: isExpanded ? p.text : '#9ca3af', opacity: 0.7 }}>{catRecipes.length}</span>
+                  <span style={{ fontSize: 13, color: isExpanded ? p.text : '#9ca3af', display: 'inline-block', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .2s' }}>›</span>
                 </div>
-                {r.description && <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10, lineHeight: 1.5 }}>{r.description.length > 100 ? r.description.slice(0, 100) + '…' : r.description}</div>}
-                <div style={{ display: 'flex', gap: 14, fontSize: 12, color: '#9ca3af', flexWrap: 'wrap' }}>
-                  {r.serving_size && <span>🍽 {r.serving_size}</span>}
-                  {r.prep_time && <span>⏱ {r.prep_time}</span>}
-                  {Array.isArray(r.ingredients) && r.ingredients.length > 0 && <span>🧂 {r.ingredients.length} ingredient{r.ingredients.length !== 1 ? 's' : ''}</span>}
-                  {Array.isArray(r.steps) && r.steps.length > 0 && <span>📋 {r.steps.length} step{r.steps.length !== 1 ? 's' : ''}</span>}
-                </div>
+
+                {/* Collapsed: subcategory pills */}
+                {!isExpanded && (cat.subcategories || []).length > 0 && (
+                  <div style={{ padding: '0 16px 12px', display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                    {(cat.subcategories || []).map(sub => {
+                      const count = recipes.filter(r => r.category === cat.name && r.subcategory === sub.name).length
+                      return (
+                        <span key={sub.name} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, background: p.bg, color: p.text, border: `1px solid ${p.border}` }}>
+                          {sub.name}{count > 0 ? ` ·${count}` : ''}
+                        </span>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* Expanded: subcategory sections */}
+                {isExpanded && (
+                  <div style={{ borderTop: `1px solid ${p.border}` }}>
+                    {(cat.subcategories || []).map((sub, si) => {
+                      const subRecipes = catRecipes.filter(r => r.subcategory === sub.name)
+                      const isLast = si === (cat.subcategories || []).length - 1
+                      return (
+                        <div key={sub.name} style={{ borderBottom: isLast ? 'none' : `1px solid ${p.border}` }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', background: '#f9fafb' }}>
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: p.dot, opacity: 0.5, flexShrink: 0 }} />
+                            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, color: '#6b7280', textTransform: 'uppercase', flex: 1 }}>{sub.name}</span>
+                            <span style={{ fontSize: 10, color: '#9ca3af' }}>{subRecipes.length}</span>
+                          </div>
+                          <div style={{ padding: '8px 12px' }}>
+                            {subRecipes.length === 0 && <div style={{ fontSize: 11, color: '#9ca3af', fontStyle: 'italic', padding: '4px 4px 6px' }}>No recipes yet.</div>}
+                            {subRecipes.map(r => (
+                              <div key={r.id} onClick={e => { e.stopPropagation(); setViewRecipe(r) }}
+                                style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 12, padding: '12px 14px', marginBottom: 8, cursor: 'pointer', transition: 'border-color .15s, box-shadow .15s' }}
+                                onMouseEnter={e => { e.currentTarget.style.borderColor = p.dot; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,.06)' }}
+                                onMouseLeave={e => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.boxShadow = 'none' }}>
+                                {r.junior_visible && <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 10, background: '#d1fae5', color: '#065f46', display: 'inline-block', marginBottom: 6 }}>Junior ✓</span>}
+                                <div style={{ fontWeight: 700, fontSize: 13, color: '#111827', lineHeight: 1.35, marginBottom: r.description ? 5 : 6 }}>{r.name}</div>
+                                {r.description && <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.5, marginBottom: 6 }}>{r.description.length > 70 ? r.description.slice(0, 70) + '…' : r.description}</div>}
+                                <div style={{ display: 'flex', gap: 10, fontSize: 10, color: '#9ca3af', flexWrap: 'wrap' }}>
+                                  {r.serving_size && <span>🍽 {r.serving_size}</span>}
+                                  {r.prep_time && <span>⏱ {r.prep_time}</span>}
+                                  {Array.isArray(r.ingredients) && r.ingredients.length > 0 && <span>🧂 {r.ingredients.length}</span>}
+                                  {Array.isArray(r.steps) && r.steps.length > 0 && <span>📋 {r.steps.length} steps</span>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
-        )}
+            )
+          })}
+        </div>
 
         {/* VIEW MODAL */}
         <Modal open={!!viewRecipe} onClose={() => setViewRecipe(null)} title={viewRecipe?.name || ''}>
-          {viewRecipe && (
-            <div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
-                <CategoryBadge cat={viewRecipe.category} categories={categories} />
-                {viewRecipe.serving_size && <span style={{ fontSize: 12, color: '#9ca3af' }}>🍽 {viewRecipe.serving_size}</span>}
-                {viewRecipe.prep_time && <span style={{ fontSize: 12, color: '#9ca3af' }}>⏱ {viewRecipe.prep_time}</span>}
-              </div>
-              {viewRecipe.description && <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 18, lineHeight: 1.6 }}>{viewRecipe.description}</p>}
-              {Array.isArray(viewRecipe.ingredients) && viewRecipe.ingredients.length > 0 && (
-                <div style={{ marginBottom: 18 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#9ca3af', marginBottom: 10 }}>Ingredients</div>
-                  <div style={{ background: '#f9fafb', borderRadius: 10, overflow: 'hidden', border: '1px solid #e5e7eb' }}>
-                    {viewRecipe.ingredients.map((ing, i) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderBottom: i < viewRecipe.ingredients.length - 1 ? '1px solid #e5e7eb' : 'none', fontSize: 13 }}>
-                        <span style={{ color: '#111827', fontWeight: 500 }}>{ing.name}</span>
-                        <span style={{ color: '#6b7280' }}>{ing.qty} {ing.unit}</span>
-                      </div>
-                    ))}
+          {viewRecipe && (() => {
+            const cat = categories.find(c => c.name === viewRecipe.category)
+            const p = cat ? PALETTE[cat.colorIdx % PALETTE.length] : PALETTE[3]
+            return (
+              <div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: p.bg, color: p.text }}>{viewRecipe.category}</span>
+                  {viewRecipe.subcategory && <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: '#f3f4f6', color: '#4b5563', border: '1px solid #e5e7eb' }}>{viewRecipe.subcategory}</span>}
+                  {viewRecipe.serving_size && <span style={{ fontSize: 12, color: '#9ca3af' }}>🍽 {viewRecipe.serving_size}</span>}
+                  {viewRecipe.prep_time && <span style={{ fontSize: 12, color: '#9ca3af' }}>⏱ {viewRecipe.prep_time}</span>}
+                </div>
+                {viewRecipe.description && <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 18, lineHeight: 1.6 }}>{viewRecipe.description}</p>}
+                {Array.isArray(viewRecipe.ingredients) && viewRecipe.ingredients.length > 0 && (
+                  <div style={{ marginBottom: 18 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#9ca3af', marginBottom: 10 }}>Ingredients</div>
+                    <div style={{ background: '#f9fafb', borderRadius: 10, overflow: 'hidden', border: '1px solid #e5e7eb' }}>
+                      {viewRecipe.ingredients.map((ing, i) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderBottom: i < viewRecipe.ingredients.length - 1 ? '1px solid #e5e7eb' : 'none', fontSize: 13 }}>
+                          <span style={{ color: '#111827', fontWeight: 500 }}>{ing.name}</span>
+                          <span style={{ color: '#6b7280' }}>{ing.qty} {ing.unit}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
+                )}
+                {Array.isArray(viewRecipe.steps) && viewRecipe.steps.length > 0 && (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#9ca3af', marginBottom: 10 }}>Preparation</div>
+                    <ol style={{ margin: 0, paddingLeft: 20 }}>
+                      {viewRecipe.steps.map((step, i) => (
+                        <li key={i} style={{ fontSize: 13, color: '#374151', marginBottom: 10, lineHeight: 1.6 }}>{step}</li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid #e5e7eb' }}>
+                  <button onClick={() => setViewRecipe(null)} style={{ padding: '9px 20px', borderRadius: 9, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, background: '#ef4576', color: 'white', fontFamily: "'DM Sans',sans-serif" }}>Close</button>
                 </div>
-              )}
-              {Array.isArray(viewRecipe.steps) && viewRecipe.steps.length > 0 && (
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#9ca3af', marginBottom: 10 }}>Preparation</div>
-                  <ol style={{ margin: 0, paddingLeft: 20 }}>
-                    {viewRecipe.steps.map((step, i) => (
-                      <li key={i} style={{ fontSize: 13, color: '#374151', marginBottom: 10, lineHeight: 1.6 }}>{step}</li>
-                    ))}
-                  </ol>
-                </div>
-              )}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid #e5e7eb' }}>
-                <button onClick={() => setViewRecipe(null)} style={{ padding: '9px 20px', borderRadius: 9, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, background: '#ef4576', color: 'white', fontFamily: "'DM Sans',sans-serif" }}>Close</button>
               </div>
-            </div>
-          )}
+            )
+          })()}
         </Modal>
       </div>
     </PortalShell>
