@@ -230,9 +230,17 @@ export default function PortalRecipesPage() {
                     <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#9ca3af', marginBottom: 10 }}>Ingredients</div>
                     <div style={{ background: '#f9fafb', borderRadius: 10, overflow: 'hidden', border: '1px solid #e5e7eb' }}>
                       {viewRecipe.ingredients.map((ing, i) => (
-                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderBottom: i < viewRecipe.ingredients.length - 1 ? '1px solid #e5e7eb' : 'none', fontSize: 13 }}>
-                          <span style={{ color: '#111827', fontWeight: 500 }}>{ing.name}</span>
-                          <span style={{ color: '#6b7280' }}>{ing.qty} {ing.unit}</span>
+                        <div key={i} style={{ padding: '10px 14px', borderBottom: i < viewRecipe.ingredients.length - 1 ? '1px solid #e5e7eb' : 'none' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: (ing.brand || ing.variant) ? 5 : 0 }}>
+                            <span style={{ color: '#111827', fontWeight: 500, fontSize: 13 }}>{ing.name}</span>
+                            <span style={{ color: '#6b7280', fontSize: 13 }}>{ing.qty} {ing.unit}</span>
+                          </div>
+                          {(ing.brand || ing.variant) && (
+                            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                              {ing.brand && <span style={{ fontSize: 11, color: '#9ca3af' }}><span style={{ fontWeight: 600, color: '#6b7280' }}>Brand:</span> {ing.brand}</span>}
+                              {ing.variant && <span style={{ fontSize: 11, color: '#9ca3af' }}><span style={{ fontWeight: 600, color: '#6b7280' }}>Variant:</span> {ing.variant}</span>}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
