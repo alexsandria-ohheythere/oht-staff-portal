@@ -305,6 +305,13 @@ export default function IncidentReportPage() {
         incident_type: '',
         violation_code: '',
         description: '',
+        persons_involved: '',
+        witnesses: '',
+        resolution: '',
+        declaration_name: '',
+        declaration_date: today,
+      })
+      showToast('✅', 'Incident report submitted — management notified')
     } catch(e) {
       showToast('❌', 'Something went wrong. Please try again.')
     }
