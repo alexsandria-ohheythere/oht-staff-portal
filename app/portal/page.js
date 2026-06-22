@@ -28,6 +28,106 @@ function getWeekDates() {
   })
 }
 
+// ── Messenger Link Card ──────────────────────────────────────────────────────
+function MessengerLinkCard({ staffId, alreadyLinked }) {
+  const [code, setCode]       = useState(null)
+  const [expires, setExpires] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [copied, setCopied]   = useState(false)
+  const [timeLeft, setTimeLeft] = useState(null)
+
+  useEffect(() => {
+    if (!expires) return
+    const interval = setInterval(() => {
+      const secs = Math.round((new Date(expires) - Date.now()) / 1000)
+      if (secs <= 0) { setCode(null); setExpires(null); setTimeLeft(null); clearInterval(interval) }
+      else setTimeLeft(secs)
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [expires])
+
+  async function generateCode() {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/messenger/generate-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staffId }),
+      })
+      const data = await res.json()
+      if (data.code) {
+        setCode(data.code)
+        setExpires(data.expiresAt)
+      }
+    } catch (e) { console.error(e) }
+    setLoading(false)
+  }
+
+  function copyCode() {
+    navigator.clipboard.writeText(`LINK-${code}`)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  if (alreadyLinked) {
+    return (
+      <div style={{ background:'#eef7e4', border:'1.5px solid #7ab648', borderRadius:13, padding:'14px 16px', marginBottom:16, display:'flex', alignItems:'center', gap:12 }}>
+        <div style={{ fontSize:22 }}>💬</div>
+        <div>
+          <div style={{ fontFamily:"'Montserrat',sans-serif", fontSize:13, fontWeight:700, color:'#4a7a1e' }}>Messenger Linked ✅</div>
+          <div style={{ fontSize:11, color:'#4a7a1e', marginTop:2 }}>You'll receive OHT notifications directly in your Messenger.</div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ background:'white', border:'1.5px solid #d8cebb', borderRadius:13, padding:'16px 18px', marginBottom:16, borderTop:'3px solid #0084ff' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+        <div style={{ fontSize:22 }}>💬</div>
+        <div>
+          <div style={{ fontFamily:"'Montserrat',sans-serif", fontSize:13, fontWeight:700, color:'#1a1208' }}>Link Messenger Notifications</div>
+          <div style={{ fontSize:11, color:'#7a6a50', marginTop:2 }}>Get shift updates, job orders & more sent to your Messenger.</div>
+        </div>
+      </div>
+
+      {!code ? (
+        <button
+          onClick={generateCode}
+          disabled={loading}
+          style={{ width:'100%', padding:'10px', background:'#0084ff', color:'white', border:'none', borderRadius:8, fontFamily:"'Montserrat',sans-serif", fontSize:13, fontWeight:700, cursor:'pointer', opacity: loading ? 0.7 : 1 }}>
+          {loading ? 'Generating…' : '🔗 Get My Link Code'}
+        </button>
+      ) : (
+        <div>
+          <div style={{ fontSize:11, color:'#7a6a50', marginBottom:8 }}>
+            Send this message to the <strong>Oh Hey There Matcha</strong> Facebook Page on Messenger:
+          </div>
+          <div style={{ background:'#f5f5f5', border:'1px solid #d8cebb', borderRadius:8, padding:'12px 14px', marginBottom:10, display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
+            <code style={{ fontFamily:'monospace', fontSize:16, fontWeight:700, letterSpacing:2, color:'#1a1208' }}>LINK-{code}</code>
+            <button
+              onClick={copyCode}
+              style={{ padding:'6px 12px', background: copied ? '#7ab648' : '#1a1208', color:'white', border:'none', borderRadius:6, fontSize:11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap', transition:'background .2s' }}>
+              {copied ? '✓ Copied!' : 'Copy'}
+            </button>
+          </div>
+          <div style={{ fontSize:11, color: timeLeft < 60 ? '#c0392b' : '#7a6a50', display:'flex', alignItems:'center', gap:4 }}>
+            ⏱ Code expires in {timeLeft >= 60 ? `${Math.floor(timeLeft/60)}m ${timeLeft%60}s` : `${timeLeft}s`}
+            <button onClick={generateCode} style={{ marginLeft:'auto', background:'none', border:'none', color:'#0084ff', fontSize:11, cursor:'pointer', fontWeight:600 }}>Regenerate</button>
+          </div>
+          <div style={{ marginTop:10, padding:'10px 12px', background:'#f0f4ff', borderRadius:8, fontSize:11, color:'#2d5a8a' }}>
+            <strong>Steps:</strong><br/>
+            1. Open Messenger and search <strong>"Oh Hey There Matcha"</strong><br/>
+            2. Paste and send the code above<br/>
+            3. You'll get a confirmation message instantly ✅
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main Dashboard ───────────────────────────────────────────────────────────
 export default function StaffDashboard() {
   const [staffProfile, setStaffProfile] = useState(null)
   const [weekShifts, setWeekShifts]     = useState([])
@@ -66,7 +166,6 @@ export default function StaffDashboard() {
   const greeting = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'
   const totalWeekHours = weekShifts.reduce((a, s) => a + (s.shift_type === 'pm' ? 7 : 8), 0)
 
-  // Check if a date has approved leave
   function hasLeave(dateStr) {
     return leaveRequests.some(l => dateStr >= l.date_from && dateStr <= l.date_to)
   }
@@ -90,6 +189,14 @@ export default function StaffDashboard() {
           <div style={{ textAlign:'center', padding:'60px', color:'#7a6a50' }}>Loading…</div>
         ) : (
           <>
+            {/* ── MESSENGER LINK CARD ── */}
+            {staffProfile && (
+              <MessengerLinkCard
+                staffId={staffProfile.id}
+                alreadyLinked={staffProfile.messenger_opted_in}
+              />
+            )}
+
             {/* ── WEEKLY CALENDAR ── */}
             <div style={{ marginBottom:20 }}>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
@@ -121,16 +228,12 @@ export default function StaffDashboard() {
                       opacity: isPast && dayShifts.length === 0 ? 0.5 : 1,
                       transition: 'all .15s',
                     }}>
-                      {/* Day name */}
                       <div style={{ fontSize:9, fontWeight:700, letterSpacing:1.5, textTransform:'uppercase', color: isToday ? 'rgba(255,255,255,.8)' : '#7a6a50', marginBottom:3 }}>
                         {DAYS[i]}
                       </div>
-                      {/* Date number */}
                       <div style={{ fontFamily:"'Montserrat',sans-serif", fontSize:18, fontWeight:700, color: isToday ? 'white' : '#1a1208', lineHeight:1, marginBottom:6 }}>
                         {d.getDate()}
                       </div>
-
-                      {/* Shift badges */}
                       {onLeave && !dayShifts.length ? (
                         <div style={{ fontSize:9, fontWeight:700, color:'#a06000', background:'#fef3e2', borderRadius:6, padding:'3px 4px' }}>On Leave</div>
                       ) : dayShifts.length === 0 ? (
