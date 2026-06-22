@@ -29,14 +29,18 @@ const fmtDate = d => d.toLocaleDateString('en-PH', { month:'short', day:'numeric
 
 export default function MySchedulePage() {
   const [weekOffset, setWeekOffset] = useState(0)
-  const [myShifts, setMyShifts]     = useState([])
+  const [allShifts, setAllShifts]   = useState([])   // all published shifts fetched once
   const [loading, setLoading]       = useState(true)
   const [staffName, setStaffName]   = useState('')
 
   const weekDates = getWeekDates(weekOffset)
-  const weekStart = toISO(weekDates[0])
   const today     = toISO(new Date())
 
+  // Derive current week's shifts from the full set — no re-fetch needed on week nav
+  const weekISOs  = weekDates.map(toISO)
+  const myShifts  = allShifts.filter(s => weekISOs.includes(s.shift_date))
+
+  // Fetch ALL published shifts once on mount
   useEffect(() => {
     const sb = createClient()
     sb.auth.getSession().then(async ({ data: { session } }) => {
@@ -48,32 +52,21 @@ export default function MySchedulePage() {
           .single()
         if (!staff) return
         setStaffName(staff.nickname || staff.first_name || '')
-        fetchShifts(staff.id)
-      } catch(e) { console.error(e) }
+
+        const { data: shifts } = await sb.from('schedules')
+          .select('*')
+          .eq('staff_id', staff.id)
+          .eq('published', true)
+          .order('shift_date')
+
+        setAllShifts(shifts || [])
+      } catch(e) {
+        console.error(e)
+      } finally {
+        setLoading(false)
+      }
     })
   }, [])
-
-  useEffect(() => {
-    const sb = createClient()
-    sb.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session) return
-      const { data: staff } = await sb.from('staff').select('id').eq('email', session.user.email).single()
-      if (staff) fetchShifts(staff.id)
-    })
-  }, [weekOffset])
-
-  async function fetchShifts(staffId) {
-    setLoading(true)
-    const sb = createClient()
-    const { data } = await sb.from('schedules')
-      .select('*')
-      .eq('staff_id', staffId)
-      .eq('week_start', weekStart)
-      .eq('published', true)
-      .order('shift_date')
-    setMyShifts(data || [])
-    setLoading(false)
-  }
 
   const totalHours = myShifts.reduce((sum, s) => {
     const sh = SHIFTS.find(x => x.id === s.shift_type)
