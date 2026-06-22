@@ -198,7 +198,7 @@ export default function PortalShell({ children }) {
             </a>
           </div>
 
-          <div className="ps-content" style={{ flex:1, overflow:'hidden', display:'flex', flexDirection:'column' }}>
+          <div className="ps-content" style={{ flex:1, overflow:'auto', display:'flex', flexDirection:'column' }}>
             {children}
           </div>
         </div>
