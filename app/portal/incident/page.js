@@ -15,6 +15,7 @@ const INCIDENT_TYPES = [
   'Abuse',
   'Other',
 ]
+const VIOLATION_CATEGORIES = ['Attendance','Shift Coverage','Conduct','Dress Code','Anti-Discrimination','Workplace Conduct','Operations','Food Safety','Confidentiality','Health & Safety','Negligence']
 
 const STATUS_STYLE = {
   pending:  { bg:'#fef3e2', color:'#a06000', label:'Pending Review' },
@@ -134,6 +135,7 @@ function StaffPicker({ allStaff, selected, onChange, currentStaffId, placeholder
 export default function IncidentReportPage() {
   const [staff, setStaff]         = useState(null)
   const [allStaff, setAllStaff]     = useState([])
+  const [violations, setViolations] = useState([])
   const [personsSelected, setPersonsSelected] = useState([])
   const [witnessSelected, setWitnessSelected]  = useState([])
   const [section, setSection]     = useState(1)   // 1 or 2
@@ -155,6 +157,7 @@ export default function IncidentReportPage() {
     reported_by: '',
     department: '',
     incident_type: '',
+    violation_code: '',
     description: '',
     persons_involved: '',
     witnesses: '',
@@ -173,6 +176,8 @@ export default function IncidentReportPage() {
       const { data: s } = await supabase.from('staff').select('*').eq('email', session.user.email).single()
       const { data: allS } = await supabase.from('staff').select('id, first_name, last_name, role').order('first_name')
       setAllStaff(allS || [])
+      const { data: viols } = await supabase.from('handbook_entries').select('id,violation_code,title,category,severity').eq('is_active', true).order('violation_code')
+      setViolations(viols || [])
       if (s) {
         setStaff(s)
         setForm(f => ({ ...f, reported_by: `${s.first_name} ${s.last_name} — ${s.role || ''}` }))
@@ -244,6 +249,7 @@ export default function IncidentReportPage() {
         reported_by: form.reported_by,
         department: form.department,
         incident_type: form.incident_type,
+        violation_code: form.violation_code || null,
         description: form.description,
         persons_involved: personsStr,
         witnesses: witnessStr || null,
@@ -297,14 +303,8 @@ export default function IncidentReportPage() {
         reported_by: staff ? `${staff.first_name} ${staff.last_name} — ${staff.role || ''}` : '',
         department: '',
         incident_type: '',
+        violation_code: '',
         description: '',
-        persons_involved: '',
-        witnesses: '',
-        resolution: '',
-        declaration_name: '',
-        declaration_date: today,
-      })
-      showToast('✅', 'Incident report submitted — management notified')
     } catch(e) {
       showToast('❌', 'Something went wrong. Please try again.')
     }
@@ -422,6 +422,46 @@ export default function IncidentReportPage() {
                       ))}
                     </div>
                   </div>
+                </div>
+
+                <div style={{ background:'white', borderRadius:12, border:'1px solid #e5e0d8', padding:'18px 20px' }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:'#1a1208', marginBottom:4 }}>Handbook Violation</div>
+                  <div style={{ fontSize:11, color:'#9a8a7a', marginBottom:14 }}>If this incident involves a policy violation, select the applicable code. This will be used if a sanction is issued.</div>
+
+                  <div style={{ marginBottom:4 }}>
+                    <label style={labelStyle}>Violation Code <span style={{ color:'#9a8a7a', fontWeight:400 }}>(optional)</span></label>
+                    <select
+                      value={form.violation_code}
+                      onChange={e => setForm(f => ({ ...f, violation_code: e.target.value }))}
+                      style={iStyle}
+                    >
+                      <option value="">— None / Not applicable —</option>
+                      {VIOLATION_CATEGORIES.map(cat => {
+                        const items = violations.filter(v => v.category === cat)
+                        if (!items.length) return null
+                        return (
+                          <optgroup key={cat} label={cat}>
+                            {items.map(v => (
+                              <option key={v.id} value={v.violation_code}>
+                                {v.violation_code} — {v.title}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )
+                      })}
+                    </select>
+                  </div>
+                  {form.violation_code && (() => {
+                    const v = violations.find(x => x.violation_code === form.violation_code)
+                    if (!v) return null
+                    const sevColors = { Minor:'#4a7a1e', Moderate:'#a06000', Major:'#c0392b', Grave:'#ff6b6b' }
+                    return (
+                      <div style={{ marginTop:8, background:'#f5f0e8', borderRadius:8, padding:'8px 12px', fontSize:12 }}>
+                        <span style={{ fontWeight:700, color: sevColors[v.severity] || '#333' }}>{v.severity}</span>
+                        <span style={{ color:'#888', marginLeft:8 }}>{v.category}</span>
+                      </div>
+                    )
+                  })()}
                 </div>
 
                 <div style={{ background:'white', borderRadius:12, border:'1px solid #e5e0d8', padding:'18px 20px' }}>
