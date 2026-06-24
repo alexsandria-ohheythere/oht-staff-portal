@@ -150,11 +150,13 @@ export default function PortalShell({ children }) {
     <>
       <style>{`
         .ps-desktop-sidebar { display: flex; }
+        .ps-desktop-topbar  { display: flex; }
         .ps-mobile-topbar   { display: none; }
         .ps-bottom-nav      { display: none; }
         .ps-content         { padding-bottom: 0; }
         @media (max-width: 768px) {
           .ps-desktop-sidebar { display: none; }
+          .ps-desktop-topbar  { display: none; }
           .ps-mobile-topbar   { display: flex; }
           .ps-bottom-nav      { display: flex; }
           .ps-content         { padding-bottom: 64px; }
@@ -181,6 +183,17 @@ export default function PortalShell({ children }) {
 
         {/* Main area */}
         <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', background:'#f5f0e8' }}>
+
+          {/* Desktop top bar — notification bell (mobile uses the bar below) */}
+          <div className="ps-desktop-topbar"
+            style={{ alignItems:'center', justifyContent:'flex-end', padding:'10px 24px', background:'white', borderBottom:'1px solid #d8cebb', flexShrink:0 }}>
+            <a href="/portal/notifications" style={{ position:'relative', textDecoration:'none' }}>
+              <div style={{ width:38, height:38, borderRadius:10, border:'1.5px solid #d8cebb', background:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>🔔</div>
+              {unreadCount > 0 && (
+                <span style={{ position:'absolute', top:-5, right:-5, background:'#EF4576', color:'white', borderRadius:20, minWidth:17, height:17, padding:'0 4px', fontSize:10, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center' }}>{unreadCount > 99 ? '99+' : unreadCount}</span>
+              )}
+            </a>
+          </div>
 
           {/* Mobile top bar */}
           <div className="ps-mobile-topbar"
