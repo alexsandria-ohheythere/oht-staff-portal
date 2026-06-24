@@ -175,7 +175,8 @@ export default function IncidentReportPage() {
       if (!session) return
       const { data: s } = await supabase.from('staff').select('*').eq('email', session.user.email).single()
       const { data: allS } = await supabase.from('staff').select('id, first_name, last_name, role').order('first_name')
-      setAllStaff(allS || [])
+      const LEADERSHIP_ROLES = ['Managing Director','CEO']
+      setAllStaff((allS || []).filter(p => !LEADERSHIP_ROLES.includes(p.role)))
       const { data: viols } = await supabase.from('handbook_entries').select('id,violation_code,title,category,severity').eq('is_active', true).order('violation_code')
       setViolations(viols || [])
       if (s) {
