@@ -3,6 +3,8 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
 import PortalShell from '../../../components/PortalShell'
 import { createClient } from '../../../lib/supabase'
+import { getDailyRate } from '../../../lib/payroll'
+import { generatePayslipPDF, buildPayslipRun } from '../../../lib/payslipPdf'
 
 const peso = n => '₱'+(parseFloat(n)||0).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2})
 
@@ -10,6 +12,9 @@ export default function MyPayslip() {
   const [staff, setStaff]       = useState(null)
   const [payRuns, setPayRuns]   = useState([])
   const [selected, setSelected] = useState(null)
+  const [schedules, setSchedules] = useState([])
+  const [leaves, setLeaves]     = useState([])
+  const [dayOffs, setDayOffs]   = useState([])
   const [loading, setLoading]   = useState(true)
 
   useEffect(()=>{ fetchData() },[])
@@ -17,14 +22,66 @@ export default function MyPayslip() {
   async function fetchData() {
     const supabase=createClient()
     const {data:{session}}=await supabase.auth.getSession(); if(!session) return
+    // Self-scope: only this staff member's own record and runs
     const {data:s}=await supabase.from('staff').select('*').eq('email',session.user.email).single()
     if(!s){setLoading(false);return}
     setStaff(s)
     const {data:runs}=await supabase.from('payroll_runs').select('*').eq('staff_id',s.id).order('cutoff_start',{ascending:false})
     setPayRuns(runs||[])
     if(runs&&runs.length>0) setSelected(runs[0])
+    // Attendance refs (own rows only). Degrades gracefully if RLS blocks.
+    try {
+      const {data:sch}=await supabase.from('schedules').select('staff_id,shift_date,published').eq('staff_id',s.id).eq('published',true)
+      setSchedules(sch||[])
+      const {data:lv}=await supabase.from('leave_requests').select('staff_id,date_from,date_to').eq('staff_id',s.id).eq('status','approved')
+      setLeaves(lv||[])
+      const {data:doff}=await supabase.from('day_offs').select('staff_id,date_from,date_to').eq('staff_id',s.id)
+      setDayOffs(doff||[])
+    } catch(e) {}
     setLoading(false)
   }
+
+  // Absence (no-show days) for a given cutoff window, using published schedule vs worked days.
+  // Staff Portal has no raw timesheet; we approximate worked days from days_worked is NOT date-specific,
+  // so we count scheduled days in window minus days_worked, then subtract excused.
+  function absenceDaysFor(run) {
+    if(!run.cutoff_start||!run.cutoff_end) return 0
+    const inWindow = d => d>=run.cutoff_start && d<=run.cutoff_end
+    const scheduled = schedules.filter(s=>inWindow(s.shift_date)).map(s=>s.shift_date)
+    const distinct = [...new Set(scheduled)]
+    if(distinct.length===0) return 0
+    const excused = distinct.filter(d =>
+      leaves.some(l=>d>=l.date_from&&d<=l.date_to) || dayOffs.some(o=>d>=o.date_from&&d<=o.date_to)
+    ).length
+    const expected = distinct.length - excused
+    const missed = Math.max(0, expected - (run.days_worked||0))
+    return missed
+  }
+
+  function rateFor() {
+    if(!staff) return {daily:0,hourly:0}
+    const daily=getDailyRate(staff.employment_type||'Full-time',staff.role)
+    return {daily, hourly:daily/8}
+  }
+
+  async function downloadPDF() {
+    if(!selected||!staff) return
+    const rate=rateFor()
+    const run=buildPayslipRun({ saved:selected, dailyRate:rate.daily, absenceDays:absenceDaysFor(selected), periodLabel:selected.cutoff_label })
+    try { await generatePayslipPDF({ staff, run, periodStart:selected.cutoff_start, periodEnd:selected.cutoff_end }) }
+    catch(e){ alert('PDF failed: '+e.message) }
+  }
+
+  const rate=rateFor()
+  const absDays = selected ? absenceDaysFor(selected) : 0
+  const absencePeso = Math.round(absDays * rate.daily)
+  const incentives = parseFloat(selected?.incentives)||0
+  const refund = parseFloat(selected?.refund)||0
+  const undertime = parseFloat(selected?.undertime)||0
+  const grossPay = selected ? (parseFloat(selected.gross)||0)+incentives+refund : 0
+  const govDed = selected ? (parseFloat(selected.sss)||0)+(parseFloat(selected.philhealth)||0)+(parseFloat(selected.pagibig)||0)+(parseFloat(selected.tax)||0) : 0
+  const late = parseFloat(selected?.late_deduction)||0
+  const netPay = Math.max(0, grossPay - govDed - late - undertime - absencePeso)
 
   return (
     <PortalShell>
@@ -60,10 +117,7 @@ export default function MyPayslip() {
                     <div style={{fontFamily:"'Montserrat',sans-serif",fontSize:16,fontWeight:700}}>Payslip</div>
                     <div style={{fontSize:11,color:'var(--text-muted)',marginTop:2}}>{selected.cutoff_label}</div>
                   </div>
-                  <div style={{textAlign:'right'}}>
-                    <div style={{fontSize:9,fontWeight:700,letterSpacing:1.5,textTransform:'uppercase',color:'var(--text-muted)'}}>Oh Hey There</div>
-                    <div style={{fontSize:10,color:'var(--text-muted)',marginTop:1}}>Filipino-owned Matcha Cafe</div>
-                  </div>
+                  <button onClick={downloadPDF} style={{background:'var(--matcha)',color:'white',border:'none',borderRadius:8,padding:'8px 14px',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",alignSelf:'start'}}>↓ Download PDF</button>
                 </div>
 
                 {/* Employee info */}
@@ -72,21 +126,35 @@ export default function MyPayslip() {
                   <div><span style={{color:'var(--text-muted)'}}>Role: </span><strong>{staff?.role}</strong></div>
                   <div><span style={{color:'var(--text-muted)'}}>Type: </span><strong>{staff?.employment_type||'Full-time'}</strong></div>
                   <div><span style={{color:'var(--text-muted)'}}>Days Worked: </span><strong>{selected.days_worked}</strong></div>
+                  <div><span style={{color:'var(--text-muted)'}}>Rate: </span><strong>{peso(rate.daily)}/day · {peso(rate.hourly)}/hr</strong></div>
+                  {(staff?.bank_name||staff?.bank_account_no)&&<div><span style={{color:'var(--text-muted)'}}>Deposit to: </span><strong>{staff?.bank_name||''} {staff?.bank_account_no||''}</strong></div>}
                 </div>
 
-                {/* Pay computation */}
-                <Row label="Gross Pay" value={peso(selected.gross)} bold />
+                {/* Earnings */}
+                <div style={{fontSize:9,fontWeight:700,letterSpacing:1,textTransform:'uppercase',color:'var(--text-muted)',margin:'4px 0 4px'}}>Earnings</div>
+                <Row label="Basic" value={peso(selected.gross)} />
+                {incentives>0&&<Row label="Incentives/Overtime" value={peso(incentives)} />}
+                {refund>0&&<Row label="Refund" value={peso(refund)} />}
+                <Row label="Gross Pay" value={peso(grossPay)} bold />
+
+                {/* Deductions */}
                 <div style={{fontSize:9,fontWeight:700,letterSpacing:1,textTransform:'uppercase',color:'var(--text-muted)',margin:'10px 0 4px'}}>Deductions</div>
-                {selected.late_deduction>0&&<Row label={`Late Deduction (${selected.total_late_mins} mins)`} value={`-${peso(selected.late_deduction)}`} red />}
                 {selected.sss>0&&<Row label="SSS" value={`-${peso(selected.sss)}`} red />}
                 {selected.philhealth>0&&<Row label="PhilHealth" value={`-${peso(selected.philhealth)}`} red />}
-                {selected.pagibig>0&&<Row label="Pag-IBIG" value={`-${peso(selected.pagibig)}`} red />}
+                {selected.pagibig>0&&<Row label="Pag-IBIG (HDMF)" value={`-${peso(selected.pagibig)}`} red />}
                 {selected.tax>0&&<Row label="Withholding Tax" value={`-${peso(selected.tax)}`} red />}
+
+                {/* Attendance Deductions */}
+                <div style={{fontSize:9,fontWeight:700,letterSpacing:1,textTransform:'uppercase',color:'var(--text-muted)',margin:'10px 0 4px'}}>Attendance Deductions</div>
+                <Row label={`Late${selected.total_late_mins?` (${selected.total_late_mins} mins)`:''}`} value={`-${peso(late)}`} red />
+                {undertime>0&&<Row label="Undertime" value={`-${peso(undertime)}`} red />}
+                <Row label={`Absence (${absDays}d)`} value={`-${peso(absencePeso)}`} red />
+
                 <div style={{borderTop:'2px solid var(--border)',marginTop:12,paddingTop:12}}>
-                  <Row label="NET PAY" value={peso(selected.net_pay)} bold big />
+                  <Row label="NET PAY" value={peso(netPay)} bold big />
                 </div>
 
-                {/* GDrive payslip link */}
+                {/* GDrive payslip link (kept) */}
                 {staff?.gdrive&&(
                   <a href={staff.gdrive} target="_blank" rel="noreferrer"
                     style={{display:'flex',alignItems:'center',gap:8,marginTop:16,background:'#e8f4f8',border:'1px solid #1a73e855',borderRadius:9,padding:'10px 14px',fontSize:12,color:'#1a73e8',fontWeight:600,textDecoration:'none'}}>
