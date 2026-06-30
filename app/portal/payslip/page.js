@@ -101,28 +101,34 @@ export default function MyPayslip() {
 
   function rateFor() {
     if(!staff) return {daily:0,hourly:0}
-    const daily=getDailyRate(staff.employment_type||'Full-time',staff.role,rateOverrides)
-    return {daily, hourly:daily/8}
+    const isFT=(staff.employment_type||'Full-time')==='Full-time'
+    const reqd = parseInt(selected?.required_days)||0
+    const monthly = staff.monthly_pay || getBaseRate(staff.employment_type||'Full-time', staff.role, rateOverrides)?.monthly || 0
+    let daily
+    if(isFT && reqd>0 && monthly>0) daily = Math.round((monthly/2)/reqd)
+    else daily = getDailyRate(staff.employment_type||'Full-time',staff.role,rateOverrides)
+    return {daily, hourly:Math.round(daily/8)}
   }
 
   async function downloadPDF() {
     if(!selected||!staff) return
     const rate=rateFor()
-    const run=buildPayslipRun({ saved:selected, dailyRate:rate.daily, absenceDays:absenceDaysFor(selected), periodLabel:selected.cutoff_label })
+    // Absence is already reflected in saved gross (rate × days worked); not subtracted again.
+    const run=buildPayslipRun({ saved:selected, dailyRate:rate.daily, absenceDays:0, periodLabel:selected.cutoff_label })
     try { await generatePayslipPDF({ staff, run, periodStart:selected.cutoff_start, periodEnd:selected.cutoff_end }) }
     catch(e){ alert('PDF failed: '+e.message) }
   }
 
   const rate=rateFor()
   const absDays = selected ? absenceDaysFor(selected) : 0
-  const absencePeso = Math.round(absDays * rate.daily)
   const incentives = parseFloat(selected?.incentives)||0
   const refund = parseFloat(selected?.refund)||0
   const undertime = parseFloat(selected?.undertime)||0
   const grossPay = selected ? (parseFloat(selected.gross)||0)+incentives+refund : 0
   const govDed = selected ? (parseFloat(selected.sss)||0)+(parseFloat(selected.philhealth)||0)+(parseFloat(selected.pagibig)||0)+(parseFloat(selected.tax)||0) : 0
   const late = parseFloat(selected?.late_deduction)||0
-  const netPay = Math.max(0, grossPay - govDed - late - undertime - absencePeso)
+  // Full-time: missed days already unpaid in gross — do not subtract absence again.
+  const netPay = Math.max(0, grossPay - govDed - late - undertime)
 
   return (
     <PortalShell>
@@ -189,7 +195,7 @@ export default function MyPayslip() {
                 <div style={{fontSize:9,fontWeight:700,letterSpacing:1,textTransform:'uppercase',color:'var(--text-muted)',margin:'10px 0 4px'}}>Attendance Deductions</div>
                 <Row label={`Late${selected.total_late_mins?` (${selected.total_late_mins} mins)`:''}`} value={`-${peso(late)}`} red />
                 {undertime>0&&<Row label="Undertime" value={`-${peso(undertime)}`} red />}
-                <Row label={`Absence (${absDays}d)`} value={`-${peso(absencePeso)}`} red />
+                {absDays>0&&<Row label={`Unpaid absences (${absDays}d)`} value="not paid" />}
 
                 <div style={{borderTop:'2px solid var(--border)',marginTop:12,paddingTop:12}}>
                   <Row label="NET PAY" value={peso(netPay)} bold big />
