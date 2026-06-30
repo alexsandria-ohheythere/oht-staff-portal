@@ -3,8 +3,43 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
 import PortalShell from '../../../components/PortalShell'
 import { createClient } from '../../../lib/supabase'
-import { getDailyRate } from '../../../lib/payroll'
 import { generatePayslipPDF, buildPayslipRun } from '../../../lib/payslipPdf'
+
+// ── Inlined rate logic (mirrors Command Center lib/payroll.js) so the portal
+//    has no cross-file dependency on lib/payroll. Reads Settings overrides too.
+const RATES = {
+  'Full-time': {
+    'Senior Barista':{monthly:17000},'Executive Chef':{monthly:17000},
+    'Junior Barista - Milk Station':{monthly:14000},'Junior Barista - Cashier':{monthly:14000},
+    'Sous Chef':{monthly:15000},
+  },
+  'Part-time': {
+    'Senior Barista':{daily:850},'Executive Chef':{daily:850},
+    'Junior Barista - Milk Station':{daily:700},'Junior Barista - Cashier':{daily:700},
+    'Sous Chef':{daily:700},'Kitchen Staff':{daily:700},
+  },
+  'Freelancer': {
+    'Cafe Supervisor':{daily:1150},'Cafe Operations Support':{daily:750},
+    'Senior Barista':{daily:850},'Executive Chef':{daily:850},
+    'Junior Barista - Milk Station':{daily:700},'Junior Barista - Cashier':{daily:700},
+    'Sous Chef':{daily:700},'Kitchen Staff':{daily:700},
+  },
+}
+function getBaseRate(employment_type, role, overrideRates=null){
+  const source = overrideRates || RATES
+  const entry = source[employment_type]?.[role]
+  if(!entry) return null
+  if(entry.type==='monthly') return {monthly:entry.amount}
+  if(entry.type==='daily')   return {daily:entry.amount}
+  return entry
+}
+function getDailyRate(employment_type, role, overrideRates=null){
+  const rate = getBaseRate(employment_type, role, overrideRates)
+  if(!rate) return 0
+  if(rate.daily) return rate.daily
+  if(rate.monthly) return Math.round(rate.monthly/26)
+  return 0
+}
 
 const peso = n => '₱'+(parseFloat(n)||0).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2})
 
@@ -15,6 +50,7 @@ export default function MyPayslip() {
   const [schedules, setSchedules] = useState([])
   const [leaves, setLeaves]     = useState([])
   const [dayOffs, setDayOffs]   = useState([])
+  const [rateOverrides, setRateOverrides] = useState(null)
   const [loading, setLoading]   = useState(true)
 
   useEffect(()=>{ fetchData() },[])
@@ -38,6 +74,11 @@ export default function MyPayslip() {
       const {data:doff}=await supabase.from('day_offs').select('staff_id,date_from,date_to').eq('staff_id',s.id)
       setDayOffs(doff||[])
     } catch(e) {}
+    // Rate overrides from Settings (same source the Command Center uses)
+    try {
+      const {data:rt}=await supabase.from('settings').select('value').eq('key','payroll_rates').single()
+      if(rt?.value){ try{ setRateOverrides(JSON.parse(rt.value)) }catch(_){} }
+    } catch(e) {}
     setLoading(false)
   }
 
@@ -60,7 +101,7 @@ export default function MyPayslip() {
 
   function rateFor() {
     if(!staff) return {daily:0,hourly:0}
-    const daily=getDailyRate(staff.employment_type||'Full-time',staff.role)
+    const daily=getDailyRate(staff.employment_type||'Full-time',staff.role,rateOverrides)
     return {daily, hourly:daily/8}
   }
 
