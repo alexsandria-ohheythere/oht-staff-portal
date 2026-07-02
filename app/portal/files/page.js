@@ -134,18 +134,24 @@ export default function MyFiles() {
                           <div style={{fontSize:12,fontWeight:600,color:'#1a1208',marginBottom:3,wordBreak:'break-word'}}>{f.file_name}</div>
                           {f.description&&<div style={{fontSize:10,color:'#7a6a50',marginBottom:6,lineHeight:1.4}}>{f.description}</div>}
                           <div style={{fontSize:10,color:'#7a6a50',marginBottom:8,fontFamily:"'DM Mono',monospace"}}>{fmtDate(f.created_at)}</div>
-                          <div style={{display:'flex',gap:5}}>
-                            <a href={f.file_url} target="_blank" rel="noreferrer"
-                              style={{flex:1,background:'#e8f0fb',color:'#4a90c4',borderRadius:6,padding:'5px 8px',fontSize:10,fontWeight:600,textDecoration:'none',textAlign:'center',display:'block'}}>
-                              👁 Open
-                            </a>
-                            {f.can_download&&(
-                              <a href={f.file_url} download={f.file_name}
-                                style={{flex:1,background:'#eef7e4',color:'#4a7a1e',borderRadius:6,padding:'5px 8px',fontSize:10,fontWeight:600,textDecoration:'none',textAlign:'center',display:'block'}}>
-                                ↓ Download
+                          {f.file_url ? (
+                            <div style={{display:'flex',gap:5}}>
+                              <a href={f.file_url} target="_blank" rel="noreferrer"
+                                style={{flex:1,background:'#e8f0fb',color:'#4a90c4',borderRadius:6,padding:'5px 8px',fontSize:10,fontWeight:600,textDecoration:'none',textAlign:'center',display:'block'}}>
+                                👁 Open
                               </a>
-                            )}
-                          </div>
+                              {f.can_download&&(
+                                <a href={f.file_url} download={f.file_name}
+                                  style={{flex:1,background:'#eef7e4',color:'#4a7a1e',borderRadius:6,padding:'5px 8px',fontSize:10,fontWeight:600,textDecoration:'none',textAlign:'center',display:'block'}}>
+                                  ↓ Download
+                                </a>
+                              )}
+                            </div>
+                          ) : (
+                            <div style={{background:'#f0ede8',color:'#9a8a7a',borderRadius:6,padding:'5px 8px',fontSize:10,fontWeight:600,textAlign:'center'}}>
+                              No file attached — text-only report
+                            </div>
+                          )}
                         </div>
                       )
                     })}
