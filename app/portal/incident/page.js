@@ -17,6 +17,55 @@ const INCIDENT_TYPES = [
 ]
 const VIOLATION_CATEGORIES = ['Attendance','Shift Coverage','Conduct','Dress Code','Anti-Discrimination','Workplace Conduct','Operations','Food Safety','Confidentiality','Health & Safety','Negligence']
 
+// Mirrors the 5-stage pipeline in Command Center's incident report workflow.
+// Staff only ever see this progress tracker — never the notes/content behind each stage —
+// except during Investigation (their chance to explain) and once Final Sanction is reached.
+const STAGES = [
+  { key: 'hr_review',      label: 'HR Review',      num: 1 },
+  { key: 'mgt_review',     label: 'Mgt. Review',    num: 2 },
+  { key: 'investigation',  label: 'Investigation',  num: 3 },
+  { key: 'final_sanction', label: 'Final Sanction', num: 4 },
+  { key: 'closed',         label: 'Closed',         num: 5 },
+]
+const STAGE_MAP = Object.fromEntries(STAGES.map(s => [s.key, s]))
+
+function parseExplanations(raw) {
+  if (!raw) return []
+  try { const list = JSON.parse(raw); return Array.isArray(list) ? list : [] } catch { return [] }
+}
+
+function MiniStageProgress({ stage }) {
+  const currentNum = STAGE_MAP[stage || 'hr_review']?.num || 1
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:0, margin:'10px 0' }}>
+      {STAGES.map((s, i) => {
+        const done = currentNum > s.num
+        const active = currentNum === s.num
+        return (
+          <div key={s.key} style={{ display:'flex', alignItems:'center', flex: i < STAGES.length - 1 ? 1 : 'none' }}>
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
+              <div style={{
+                width:20, height:20, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
+                fontSize:9, fontWeight:700,
+                background: done || active ? '#EF4576' : '#e5e0d8',
+                color: done || active ? 'white' : '#9a8a7a',
+              }}>
+                {done ? '✓' : s.num}
+              </div>
+              <div style={{ fontSize:8, color: active ? '#EF4576' : '#9a8a7a', fontWeight: active ? 700 : 400, whiteSpace:'nowrap' }}>
+                {s.label}
+              </div>
+            </div>
+            {i < STAGES.length - 1 && (
+              <div style={{ flex:1, height:2, background: done ? '#EF4576' : '#e5e0d8', margin:'0 2px', marginBottom:12 }} />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 const STATUS_STYLE = {
   pending:  { bg:'#fef3e2', color:'#a06000', label:'Pending Review' },
   reviewed: { bg:'#e8f0fb', color:'#2d5a8a', label:'Reviewed' },
@@ -142,6 +191,12 @@ export default function IncidentReportPage() {
   const [saving, setSaving]       = useState(false)
   const [toast, setToast]         = useState(null)
   const [myReports, setMyReports] = useState([])
+  const [involvingReports, setInvolvingReports] = useState([])
+  const [activeTab, setActiveTab] = useState('mine') // 'mine' | 'involving'
+  const [expandedInvolving, setExpandedInvolving] = useState(null)
+  const [explanationDrafts, setExplanationDrafts] = useState({})
+  const [editingExplanation, setEditingExplanation] = useState(null)
+  const [submittingExplanation, setSubmittingExplanation] = useState(false)
   const [loading, setLoading]     = useState(true)
   const [showForm, setShowForm]   = useState(false)
   const [photoFile, setPhotoFile] = useState(null)
@@ -188,6 +243,17 @@ export default function IncidentReportPage() {
           .eq('staff_id', s.id)
           .order('created_at', { ascending: false })
         setMyReports(rpts || [])
+
+        // Reports naming this staff member as a person involved (not the filer).
+        // Matches by ID substring since persons_involved_ids is a plain comma-joined
+        // text field rather than a relational array — safe given UUIDs are unique.
+        const { data: invR } = await supabase
+          .from('incident_reports')
+          .select('id, stage, created_at, persons_involved_ids, staff_explanations')
+          .neq('staff_id', s.id)
+          .ilike('persons_involved_ids', `%${s.id}%`)
+          .order('created_at', { ascending: false })
+        setInvolvingReports(invR || [])
       }
     } catch(e) { console.error(e) }
     setLoading(false)
@@ -318,6 +384,52 @@ export default function IncidentReportPage() {
       showToast('❌', 'Something went wrong. Please try again.')
     }
     setSaving(false)
+  }
+
+  // Records or updates this staff member's written explanation on a report that's
+  // reached the Investigation stage. Stored as a JSON list on the report itself so
+  // multiple named staff can each submit independently.
+  async function submitExplanation(reportId) {
+    const text = (explanationDrafts[reportId] || '').trim()
+    if (!text) { showToast('⚠️', 'Please write something before submitting'); return }
+    setSubmittingExplanation(true)
+    try {
+      const supabase = createClient()
+      const { data: current } = await supabase
+        .from('incident_reports')
+        .select('staff_explanations')
+        .eq('id', reportId)
+        .single()
+      const list = parseExplanations(current?.staff_explanations)
+      const entry = {
+        staff_id: staff.id,
+        name: `${staff.first_name} ${staff.last_name}`,
+        text,
+        submitted_at: new Date().toISOString(),
+      }
+      const idx = list.findIndex(e => e.staff_id === staff.id)
+      if (idx >= 0) list[idx] = entry; else list.push(entry)
+
+      const updatedRaw = JSON.stringify(list)
+      const { error } = await supabase
+        .from('incident_reports')
+        .update({ staff_explanations: updatedRaw })
+        .eq('id', reportId)
+      if (error) { showToast('❌', error.message); setSubmittingExplanation(false); return }
+
+      await notifyAdmins({
+        type: 'general',
+        title: '💬 Explanation Submitted',
+        message: `${staff.first_name} ${staff.last_name} submitted their explanation for an incident report under investigation.`,
+      })
+
+      setInvolvingReports(list2 => list2.map(r => r.id === reportId ? { ...r, staff_explanations: updatedRaw } : r))
+      setEditingExplanation(null)
+      showToast('✅', 'Explanation submitted')
+    } catch(e) {
+      showToast('❌', 'Something went wrong. Please try again.')
+    }
+    setSubmittingExplanation(false)
   }
 
   return (
@@ -602,47 +714,170 @@ export default function IncidentReportPage() {
           </div>
         )}
 
-        {/* MY REPORTS LIST */}
+        {/* REPORTS — TABBED */}
         {!showForm && (
           <div>
-            <div style={{ fontSize:13, fontWeight:700, color:'#3a2a1a', marginBottom:12 }}>My Submitted Reports</div>
-            {loading ? (
-              <div style={{ fontSize:12, color:'#9a8a7a', padding:'20px 0' }}>Loading...</div>
-            ) : myReports.length === 0 ? (
-              <div style={{ background:'white', borderRadius:12, border:'1px solid #e5e0d8', padding:'32px 20px', textAlign:'center' }}>
-                <div style={{ fontSize:32, marginBottom:10 }}>📋</div>
-                <div style={{ fontSize:13, fontWeight:600, color:'#5a4a3a', marginBottom:6 }}>No reports yet</div>
-                <div style={{ fontSize:11, color:'#9a8a7a' }}>Tap "+ File Report" above to submit an incident report.</div>
-              </div>
-            ) : (
-              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                {myReports.map(r => {
-                  const st = STATUS_STYLE[r.status] || STATUS_STYLE.pending
-                  return (
-                    <div key={r.id} style={{ background:'white', borderRadius:12, border:'1px solid #e5e0d8', padding:'14px 16px' }}>
-                      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:10, marginBottom:8 }}>
-                        <div>
-                          <div style={{ fontSize:13, fontWeight:700, color:'#1a1208' }}>{r.incident_type}</div>
-                          <div style={{ fontSize:11, color:'#9a8a7a', marginTop:2 }}>
-                            {fmtDatetime(r.date_of_report)} · {r.department}
+            <div style={{ display:'flex', gap:6, marginBottom:14, background:'#f0ede8', borderRadius:10, padding:4 }}>
+              <button
+                onClick={() => setActiveTab('mine')}
+                style={{ flex:1, border:'none', borderRadius:8, padding:'9px 10px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", background: activeTab === 'mine' ? 'white' : 'transparent', color: activeTab === 'mine' ? '#1a1208' : '#7a6a50', boxShadow: activeTab === 'mine' ? '0 1px 4px rgba(0,0,0,.08)' : 'none' }}>
+                My Submitted Reports
+              </button>
+              <button
+                onClick={() => setActiveTab('involving')}
+                style={{ flex:1, border:'none', borderRadius:8, padding:'9px 10px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", background: activeTab === 'involving' ? 'white' : 'transparent', color: activeTab === 'involving' ? '#1a1208' : '#7a6a50', boxShadow: activeTab === 'involving' ? '0 1px 4px rgba(0,0,0,.08)' : 'none' }}>
+                Reports Involving Me{involvingReports.length > 0 ? ` (${involvingReports.length})` : ''}
+              </button>
+            </div>
+
+            {/* TAB: MY SUBMITTED REPORTS */}
+            {activeTab === 'mine' && (
+              loading ? (
+                <div style={{ fontSize:12, color:'#9a8a7a', padding:'20px 0' }}>Loading...</div>
+              ) : myReports.length === 0 ? (
+                <div style={{ background:'white', borderRadius:12, border:'1px solid #e5e0d8', padding:'32px 20px', textAlign:'center' }}>
+                  <div style={{ fontSize:32, marginBottom:10 }}>📋</div>
+                  <div style={{ fontSize:13, fontWeight:600, color:'#5a4a3a', marginBottom:6 }}>No reports yet</div>
+                  <div style={{ fontSize:11, color:'#9a8a7a' }}>Tap "+ File Report" above to submit an incident report.</div>
+                </div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                  {myReports.map(r => {
+                    const st = STATUS_STYLE[r.status] || STATUS_STYLE.pending
+                    return (
+                      <div key={r.id} style={{ background:'white', borderRadius:12, border:'1px solid #e5e0d8', padding:'14px 16px' }}>
+                        <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:10, marginBottom:8 }}>
+                          <div>
+                            <div style={{ fontSize:13, fontWeight:700, color:'#1a1208' }}>{r.incident_type}</div>
+                            <div style={{ fontSize:11, color:'#9a8a7a', marginTop:2 }}>
+                              {fmtDatetime(r.date_of_report)} · {r.department}
+                            </div>
                           </div>
+                          <span style={{ background:st.bg, color:st.color, borderRadius:20, padding:'3px 10px', fontSize:10, fontWeight:700, flexShrink:0 }}>
+                            {st.label}
+                          </span>
                         </div>
-                        <span style={{ background:st.bg, color:st.color, borderRadius:20, padding:'3px 10px', fontSize:10, fontWeight:700, flexShrink:0 }}>
-                          {st.label}
-                        </span>
-                      </div>
-                      <div style={{ fontSize:11, color:'#5a4a3a', lineHeight:1.5, borderTop:'1px solid #f0ede8', paddingTop:8 }}>
-                        {r.description?.slice(0, 140)}{r.description?.length > 140 ? '...' : ''}
-                      </div>
-                      {r.admin_notes && (
-                        <div style={{ marginTop:8, background:'#eef7e4', borderRadius:7, padding:'8px 10px', fontSize:11, color:'#4a7a1e' }}>
-                          <strong>Admin note:</strong> {r.admin_notes}
+                        <div style={{ fontSize:11, color:'#5a4a3a', lineHeight:1.5, borderTop:'1px solid #f0ede8', paddingTop:8 }}>
+                          {r.description?.slice(0, 140)}{r.description?.length > 140 ? '...' : ''}
                         </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
+                        {r.admin_notes && (
+                          <div style={{ marginTop:8, background:'#eef7e4', borderRadius:7, padding:'8px 10px', fontSize:11, color:'#4a7a1e' }}>
+                            <strong>Admin note:</strong> {r.admin_notes}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            )}
+
+            {/* TAB: REPORTS INVOLVING ME — anonymous, stage-progress only */}
+            {activeTab === 'involving' && (
+              loading ? (
+                <div style={{ fontSize:12, color:'#9a8a7a', padding:'20px 0' }}>Loading...</div>
+              ) : involvingReports.length === 0 ? (
+                <div style={{ background:'white', borderRadius:12, border:'1px solid #e5e0d8', padding:'32px 20px', textAlign:'center' }}>
+                  <div style={{ fontSize:32, marginBottom:10 }}>🗂️</div>
+                  <div style={{ fontSize:13, fontWeight:600, color:'#5a4a3a', marginBottom:6 }}>Nothing here</div>
+                  <div style={{ fontSize:11, color:'#9a8a7a' }}>You're not currently named in any incident report.</div>
+                </div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                  <div style={{ background:'#e8f0fb', border:'1px solid #b8cff5', borderRadius:8, padding:'10px 12px', fontSize:11, color:'#2d5a8a', lineHeight:1.5, marginBottom:2 }}>
+                    These reports are kept confidential. You'll only see the overall stage — not who filed it or what was written — except during Investigation, when you can share your side.
+                  </div>
+                  {involvingReports.map(r => {
+                    const stage = r.stage || 'hr_review'
+                    const isExpanded = expandedInvolving === r.id
+                    const explanations = parseExplanations(r.staff_explanations)
+                    const mine = explanations.find(e => e.staff_id === staff?.id)
+                    const isEditingThis = editingExplanation === r.id
+                    return (
+                      <div key={r.id} style={{ background:'white', borderRadius:12, border:'1px solid #e5e0d8', padding:'14px 16px' }}>
+                        <div
+                          onClick={() => setExpandedInvolving(isExpanded ? null : r.id)}
+                          style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer' }}>
+                          <div>
+                            <div style={{ fontSize:13, fontWeight:700, color:'#1a1208' }}>Incident Report</div>
+                            <div style={{ fontSize:11, color:'#9a8a7a', marginTop:2 }}>Filed {fmtDatetime(r.created_at)}</div>
+                          </div>
+                          <span style={{ fontSize:11, color:'#7a6a50' }}>{isExpanded ? '▲' : '▼'}</span>
+                        </div>
+
+                        {isExpanded && (
+                          <div style={{ borderTop:'1px solid #f0ede8', marginTop:12, paddingTop:4 }}>
+                            <MiniStageProgress stage={stage} />
+
+                            {(stage === 'hr_review' || stage === 'mgt_review') && (
+                              <div style={{ fontSize:12, color:'#7a6a50', lineHeight:1.6, marginTop:6 }}>
+                                This report is under review. You'll be able to share your side once it reaches the Investigation stage.
+                              </div>
+                            )}
+
+                            {stage === 'investigation' && (
+                              <div style={{ marginTop:6 }}>
+                                {mine && !isEditingThis ? (
+                                  <div>
+                                    <div style={{ fontSize:11, fontWeight:700, color:'#5a4a3a', marginBottom:4 }}>
+                                      Your Explanation — submitted {fmtDatetime(mine.submitted_at)}
+                                    </div>
+                                    <div style={{ background:'#f5f0e8', borderRadius:8, padding:'10px 12px', fontSize:12, color:'#3a2a1a', lineHeight:1.6, whiteSpace:'pre-wrap', marginBottom:8 }}>
+                                      {mine.text}
+                                    </div>
+                                    <button
+                                      onClick={() => { setEditingExplanation(r.id); setExplanationDrafts(d => ({ ...d, [r.id]: mine.text })) }}
+                                      style={{ background:'none', border:'none', color:'#EF4576', fontSize:11, fontWeight:700, cursor:'pointer', padding:0 }}>
+                                      ✏ Edit my explanation
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <div style={{ fontSize:12, color:'#7a6a50', lineHeight:1.6, marginBottom:8 }}>
+                                      This report has reached Investigation and names you. This is your chance to explain your side before a decision is made.
+                                    </div>
+                                    <textarea
+                                      value={explanationDrafts[r.id] || ''}
+                                      onChange={e => setExplanationDrafts(d => ({ ...d, [r.id]: e.target.value }))}
+                                      rows={4}
+                                      placeholder="Share your side of what happened..."
+                                      style={{ ...iStyle, minHeight:90, resize:'vertical', marginBottom:8 }}
+                                    />
+                                    <button
+                                      onClick={() => submitExplanation(r.id)}
+                                      disabled={submittingExplanation}
+                                      style={{ background: submittingExplanation ? '#ccc' : '#EF4576', color:'white', border:'none', borderRadius:8, padding:'9px 14px', fontSize:12, fontWeight:700, cursor: submittingExplanation ? 'default' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                                      {submittingExplanation ? 'Submitting...' : 'Submit Explanation'}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {(stage === 'final_sanction' || stage === 'closed') && (
+                              <div style={{ marginTop:6 }}>
+                                {mine && (
+                                  <div style={{ marginBottom:10 }}>
+                                    <div style={{ fontSize:11, fontWeight:700, color:'#5a4a3a', marginBottom:4 }}>
+                                      Your Explanation — submitted {fmtDatetime(mine.submitted_at)}
+                                    </div>
+                                    <div style={{ background:'#f5f0e8', borderRadius:8, padding:'10px 12px', fontSize:12, color:'#3a2a1a', lineHeight:1.6, whiteSpace:'pre-wrap' }}>
+                                      {mine.text}
+                                    </div>
+                                  </div>
+                                )}
+                                <div style={{ background:'#fde8ee', border:'1px solid #f5b8ca', borderRadius:8, padding:'10px 12px', fontSize:12, color:'#c0392b', lineHeight:1.6 }}>
+                                  This case has been finalized. Check <strong>My Sanctions</strong> for any resulting outcome.
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
             )}
           </div>
         )}
