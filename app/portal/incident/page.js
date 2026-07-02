@@ -264,7 +264,7 @@ export default function IncidentReportPage() {
         // UUIDs are unique.
         const { data: invR } = await supabase
           .from('incident_reports')
-          .select('id, stage, created_at, persons_involved_ids, staff_explanations, handbook_ref, offense_num, sanctioned_staff_ids, hr_violation, incident_type, sanction_type')
+          .select('id, stage, created_at, persons_involved_ids, staff_explanations, handbook_ref, offense_num, sanctioned_staff_ids, hr_violation, incident_type, sanction_type, mgt_case_summary')
           .ilike('persons_involved_ids', `%${s.id}%`)
           .order('created_at', { ascending: false })
         setInvolvingReports(invR || [])
@@ -831,7 +831,7 @@ export default function IncidentReportPage() {
 
                             {stage === 'investigation' && (
                               <div style={{ marginTop:6 }}>
-                                {(r.incident_type || r.hr_violation) && (
+                                {(r.incident_type || r.hr_violation || r.mgt_case_summary) && (
                                   <div style={{ background:'#fef3e2', border:'1px solid #f5d78e', borderRadius:8, padding:'10px 12px', marginBottom:10 }}>
                                     <div style={{ fontSize:11, fontWeight:700, color:'#a06000', marginBottom:2 }}>What This Is About</div>
                                     {r.incident_type && (
@@ -842,6 +842,11 @@ export default function IncidentReportPage() {
                                     )}
                                     {!r.hr_violation && (
                                       <div style={{ fontSize:11, color:'#a06000', marginTop:4 }}>A specific handbook violation hasn't been tagged yet.</div>
+                                    )}
+                                    {r.mgt_case_summary && (
+                                      <div style={{ fontSize:12, color:'#3a2a1a', lineHeight:1.5, marginTop:8, paddingTop:8, borderTop:'1px solid #f0dba8' }}>
+                                        {r.mgt_case_summary}
+                                      </div>
                                     )}
                                   </div>
                                 )}
@@ -898,6 +903,11 @@ export default function IncidentReportPage() {
                                       {r.offense_num && (
                                         <div style={{ fontSize:11, color:'#7a6a50', marginTop:2 }}>{r.offense_num} Offense</div>
                                       )}
+                                    </div>
+                                  )}
+                                  {r.mgt_case_summary && (
+                                    <div style={{ background:'#fef3e2', border:'1px solid #f5d78e', borderRadius:8, padding:'10px 12px', marginBottom:10, fontSize:12, color:'#3a2a1a', lineHeight:1.5 }}>
+                                      {r.mgt_case_summary}
                                     </div>
                                   )}
 
