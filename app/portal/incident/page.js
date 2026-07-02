@@ -929,19 +929,14 @@ export default function IncidentReportPage() {
                                         This sanction has been decided and no further explanation can be submitted.
                                       </div>
                                     </div>
-                                  ) : mine && !isEditingThis ? (
+                                  ) : mine ? (
                                     <div>
                                       <div style={{ fontSize:11, fontWeight:700, color:'#5a4a3a', marginBottom:4 }}>
                                         Your Explanation — submitted {fmtDatetime(mine.submitted_at)}
                                       </div>
-                                      <div style={{ background:'#f5f0e8', borderRadius:8, padding:'10px 12px', fontSize:12, color:'#3a2a1a', lineHeight:1.6, whiteSpace:'pre-wrap', marginBottom:8 }}>
+                                      <div style={{ background:'#f5f0e8', borderRadius:8, padding:'10px 12px', fontSize:12, color:'#3a2a1a', lineHeight:1.6, whiteSpace:'pre-wrap' }}>
                                         {mine.text}
                                       </div>
-                                      <button
-                                        onClick={() => { setEditingExplanation(r.id); setExplanationDrafts(d => ({ ...d, [r.id]: mine.text })) }}
-                                        style={{ background:'none', border:'none', color:'#EF4576', fontSize:11, fontWeight:700, cursor:'pointer', padding:0 }}>
-                                        ✏ Edit my explanation
-                                      </button>
                                     </div>
                                   ) : (
                                     <div>
