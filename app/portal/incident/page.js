@@ -34,6 +34,19 @@ function parseExplanations(raw) {
   try { const list = JSON.parse(raw); return Array.isArray(list) ? list : [] } catch { return [] }
 }
 
+// Once a sanction type is decided during Final Sanction: an NTE (Notice to Explain)
+// means the employee still has a right to respond before it's finalized, even if a
+// preventive suspension is attached (e.g. "NTE + 3-day Suspension") — so NTE wins even
+// when both words appear. A decided Suspension or Termination with no NTE means the
+// case is settled and no further explanation can be submitted.
+function explanationStatus(sanctionType) {
+  const t = (sanctionType || '').toLowerCase()
+  if (!t) return 'open'                                    // no sanction decided yet — keep it open
+  if (t.includes('nte')) return 'open'
+  if (t.includes('suspension') || t.includes('termination')) return 'locked'
+  return 'open'                                             // e.g. plain warnings — no restriction stated
+}
+
 function MiniStageProgress({ stage }) {
   const currentNum = STAGE_MAP[stage || 'hr_review']?.num || 1
   return (
@@ -251,7 +264,7 @@ export default function IncidentReportPage() {
         // UUIDs are unique.
         const { data: invR } = await supabase
           .from('incident_reports')
-          .select('id, stage, created_at, persons_involved_ids, staff_explanations, handbook_ref, offense_num, sanctioned_staff_ids, hr_violation, incident_type')
+          .select('id, stage, created_at, persons_involved_ids, staff_explanations, handbook_ref, offense_num, sanctioned_staff_ids, hr_violation, incident_type, sanction_type')
           .ilike('persons_involved_ids', `%${s.id}%`)
           .order('created_at', { ascending: false })
         setInvolvingReports(invR || [])
@@ -869,32 +882,80 @@ export default function IncidentReportPage() {
                               </div>
                             )}
 
-                            {stage === 'final_sanction' && (
-                              <div style={{ marginTop:6 }}>
-                                <div style={{ fontSize:12, color:'#7a6a50', lineHeight:1.6, marginBottom:10 }}>
-                                  Management is finalizing a decision on this report. Here's the violation being considered:
+                            {stage === 'final_sanction' && (() => {
+                              const expStatus = explanationStatus(r.sanction_type)
+                              return (
+                                <div style={{ marginTop:6 }}>
+                                  <div style={{ fontSize:12, color:'#7a6a50', lineHeight:1.6, marginBottom:10 }}>
+                                    {expStatus === 'locked'
+                                      ? 'Management has finalized a decision on this report.'
+                                      : 'Management is finalizing a decision on this report. Here\'s the violation being considered:'}
+                                  </div>
+                                  {r.handbook_ref && (
+                                    <div style={{ background:'#fde8ee', borderRadius:8, padding:'10px 12px', marginBottom:10 }}>
+                                      <div style={{ fontSize:11, fontWeight:700, color:'#c0392b', marginBottom:2 }}>Violation</div>
+                                      <div style={{ fontSize:12, color:'#1a1208' }}>{r.handbook_ref}</div>
+                                      {r.offense_num && (
+                                        <div style={{ fontSize:11, color:'#7a6a50', marginTop:2 }}>{r.offense_num} Offense</div>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {expStatus === 'locked' ? (
+                                    <div>
+                                      {mine && (
+                                        <div style={{ marginBottom:10 }}>
+                                          <div style={{ fontSize:11, fontWeight:700, color:'#5a4a3a', marginBottom:4 }}>
+                                            Your Explanation — submitted {fmtDatetime(mine.submitted_at)}
+                                          </div>
+                                          <div style={{ background:'#f5f0e8', borderRadius:8, padding:'10px 12px', fontSize:12, color:'#3a2a1a', lineHeight:1.6, whiteSpace:'pre-wrap' }}>
+                                            {mine.text}
+                                          </div>
+                                        </div>
+                                      )}
+                                      <div style={{ background:'#f0f0f0', borderRadius:8, padding:'10px 12px', fontSize:11, color:'#666', lineHeight:1.5 }}>
+                                        This sanction has been decided and no further explanation can be submitted.
+                                      </div>
+                                    </div>
+                                  ) : mine && !isEditingThis ? (
+                                    <div>
+                                      <div style={{ fontSize:11, fontWeight:700, color:'#5a4a3a', marginBottom:4 }}>
+                                        Your Explanation — submitted {fmtDatetime(mine.submitted_at)}
+                                      </div>
+                                      <div style={{ background:'#f5f0e8', borderRadius:8, padding:'10px 12px', fontSize:12, color:'#3a2a1a', lineHeight:1.6, whiteSpace:'pre-wrap', marginBottom:8 }}>
+                                        {mine.text}
+                                      </div>
+                                      <button
+                                        onClick={() => { setEditingExplanation(r.id); setExplanationDrafts(d => ({ ...d, [r.id]: mine.text })) }}
+                                        style={{ background:'none', border:'none', color:'#EF4576', fontSize:11, fontWeight:700, cursor:'pointer', padding:0 }}>
+                                        ✏ Edit my explanation
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div>
+                                      <div style={{ fontSize:12, color:'#7a6a50', lineHeight:1.6, marginBottom:8 }}>
+                                        {r.sanction_type && r.sanction_type.toLowerCase().includes('nte')
+                                          ? 'A Notice to Explain has been issued. You can still submit your explanation before a final decision is made.'
+                                          : 'This is your chance to explain your side before a final decision is made.'}
+                                      </div>
+                                      <textarea
+                                        value={explanationDrafts[r.id] || ''}
+                                        onChange={e => setExplanationDrafts(d => ({ ...d, [r.id]: e.target.value }))}
+                                        rows={4}
+                                        placeholder="Share your side of what happened..."
+                                        style={{ ...iStyle, minHeight:90, resize:'vertical', marginBottom:8 }}
+                                      />
+                                      <button
+                                        onClick={() => submitExplanation(r.id)}
+                                        disabled={submittingExplanation}
+                                        style={{ background: submittingExplanation ? '#ccc' : '#EF4576', color:'white', border:'none', borderRadius:8, padding:'9px 14px', fontSize:12, fontWeight:700, cursor: submittingExplanation ? 'default' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                                        {submittingExplanation ? 'Submitting...' : 'Submit Explanation'}
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
-                                {r.handbook_ref && (
-                                  <div style={{ background:'#fde8ee', borderRadius:8, padding:'10px 12px', marginBottom:10 }}>
-                                    <div style={{ fontSize:11, fontWeight:700, color:'#c0392b', marginBottom:2 }}>Violation</div>
-                                    <div style={{ fontSize:12, color:'#1a1208' }}>{r.handbook_ref}</div>
-                                    {r.offense_num && (
-                                      <div style={{ fontSize:11, color:'#7a6a50', marginTop:2 }}>{r.offense_num} Offense</div>
-                                    )}
-                                  </div>
-                                )}
-                                {mine && (
-                                  <div>
-                                    <div style={{ fontSize:11, fontWeight:700, color:'#5a4a3a', marginBottom:4 }}>
-                                      Your Explanation — submitted {fmtDatetime(mine.submitted_at)}
-                                    </div>
-                                    <div style={{ background:'#f5f0e8', borderRadius:8, padding:'10px 12px', fontSize:12, color:'#3a2a1a', lineHeight:1.6, whiteSpace:'pre-wrap' }}>
-                                      {mine.text}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            )}
+                              )
+                            })()}
 
                             {stage === 'closed' && (
                               <div style={{ marginTop:6 }}>
