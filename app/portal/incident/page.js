@@ -807,13 +807,15 @@ export default function IncidentReportPage() {
                     const explanations = parseExplanations(r.staff_explanations)
                     const mine = explanations.find(e => e.staff_id === staff?.id)
                     const isEditingThis = editingExplanation === r.id
+                    const canSeeViolation = ['investigation', 'final_sanction', 'closed'].includes(stage)
+                    const cardTitle = canSeeViolation ? (r.hr_violation || r.incident_type || 'Incident Report') : 'Incident Report'
                     return (
                       <div key={r.id} style={{ background:'white', borderRadius:12, border:'1px solid #e5e0d8', padding:'14px 16px' }}>
                         <div
                           onClick={() => setExpandedInvolving(isExpanded ? null : r.id)}
                           style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer' }}>
                           <div>
-                            <div style={{ fontSize:13, fontWeight:700, color:'#1a1208' }}>Incident Report</div>
+                            <div style={{ fontSize:13, fontWeight:700, color:'#1a1208' }}>{cardTitle}</div>
                             <div style={{ fontSize:11, color:'#9a8a7a', marginTop:2 }}>Filed {fmtDatetime(r.created_at)}</div>
                           </div>
                           <span style={{ fontSize:11, color:'#7a6a50' }}>{isExpanded ? '▲' : '▼'}</span>
