@@ -28,7 +28,6 @@ const fmtDT   = s => s ? new Date(s).toLocaleDateString('en-PH', { month:'short'
 export default function MyFinalSanctionsPage() {
   const [sanctions, setSanctions] = useState([])
   const [loading, setLoading]     = useState(true)
-  const [selected, setSelected]   = useState(null)
 
   useEffect(() => {
     const supabase = createClient()
@@ -46,100 +45,66 @@ export default function MyFinalSanctionsPage() {
     const st = STATUS_STYLE[s.status] || DEFAULT_STATUS_STYLE
     const sv = SEV_STYLE[s.severity] || { bg:'#eee', color:'#333' }
     return (
-      <div onClick={() => setSelected(s)} style={{ background:'white', border:'1.5px solid #e8ddd0', borderRadius:12, padding:16, cursor:'pointer', marginBottom:12, transition:'box-shadow 0.15s', boxShadow: selected?.id === s.id ? '0 4px 16px rgba(0,0,0,0.1)' : 'none' }}>
+      <div style={{ background:'white', border:'1px solid #d8cebb', borderRadius:13, padding:'14px 16px', marginBottom:10 }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:10, marginBottom:8 }}>
           <div>
-            <span style={{ fontSize:11, fontWeight:700, color:'#bbb', fontFamily:'monospace' }}>{s.violation_code}</span>
+            <span style={{ fontSize:11, fontWeight:700, color:'#9a8a7a', fontFamily:"'DM Mono',monospace" }}>{s.violation_code}</span>
             <div style={{ fontSize:14, fontWeight:700, color:'#1a1208', marginTop:2 }}>{s.violation_title}</div>
-            <div style={{ fontSize:12, color:'#888', marginTop:2 }}>{s.category} · {s.offense_number}{['st','nd','rd','th','th'][s.offense_number-1]} Offense</div>
+            <div style={{ fontSize:12, color:'#7a6a50', marginTop:2 }}>{s.category} · {s.offense_number}{['st','nd','rd','th','th'][s.offense_number-1]} Offense</div>
           </div>
-          <div style={{ display:'flex', flexDirection:'column', gap:5, alignItems:'flex-end' }}>
+          <div style={{ display:'flex', flexDirection:'column', gap:5, alignItems:'flex-end', flexShrink:0 }}>
             <span style={{ background:sv.bg, color:sv.color, borderRadius:20, padding:'2px 10px', fontSize:10, fontWeight:700, whiteSpace:'nowrap' }}>{s.severity}</span>
             <span style={{ background:st.bg, color:st.color, borderRadius:20, padding:'2px 10px', fontSize:10, fontWeight:700, whiteSpace:'nowrap' }}>{st.label}</span>
           </div>
         </div>
-        <div style={{ background:'#f5f0e8', borderRadius:8, padding:'8px 12px', fontSize:12 }}>
-          <span style={{ fontWeight:700, color:'#5a4a3a' }}>Final Sanction: </span>
-          <span style={{ color:'#1a1208' }}>{s.sanction_type}</span>
+
+        <div style={{ background:'#fde8ee', borderRadius:8, padding:'10px 12px', marginBottom: s.admin_notes ? 8 : 0 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:'#c0392b', marginBottom:2 }}>Final Sanction Issued</div>
+          <div style={{ fontSize:12, color:'#1a1208' }}>{s.sanction_type}</div>
+          {s.suspension_days && (
+            <div style={{ fontSize:11, color:'#c0392b', marginTop:4 }}>
+              🚫 {s.suspension_days}-day suspension
+              {s.suspension_start ? ` · Starts ${fmtDate(s.suspension_start)}` : ''}
+              {s.suspension_end ? ` · Ends ${fmtDate(s.suspension_end)}` : ''}
+            </div>
+          )}
         </div>
-        {s.suspension_days && (
-          <div style={{ marginTop:8, fontSize:12, color:'#c0392b' }}>
-            🚫 {s.suspension_days}-day suspension
-            {s.suspension_start ? ` · ${fmtDate(s.suspension_start)}` : ''}
-            {s.suspension_end ? ` → ${fmtDate(s.suspension_end)}` : ''}
+
+        {s.admin_notes && (
+          <div style={{ background:'#f5f0e8', borderRadius:8, padding:'9px 12px', fontSize:11, color:'#5a4a3a', lineHeight:1.5, marginBottom:8 }}>
+            <strong>Notes:</strong> {s.admin_notes}
           </div>
         )}
-        <div style={{ marginTop:8, fontSize:11, color:'#bbb' }}>Issued {fmtDT(s.created_at)}</div>
+
+        <div style={{ fontSize:10, color:'#9a8a7a' }}>Issued {fmtDT(s.created_at)}</div>
       </div>
     )
   }
 
   return (
     <PortalShell>
-      <div style={{ padding:'24px 20px', fontFamily:"'DM Sans',sans-serif", maxWidth:640, margin:'0 auto' }}>
+      <div style={{ background:'white', borderBottom:'1px solid #d8cebb', padding:'0 24px', height:56, display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+        <div>
+          <div style={{ fontFamily:"'Montserrat',sans-serif", fontSize:17, fontWeight:700 }}>⚖️ My Final Sanctions</div>
+          <div style={{ fontSize:11, color:'#7a6a50', marginTop:1 }}>{sanctions.length} on record</div>
+        </div>
+      </div>
 
-        <div style={{ marginBottom:24 }}>
-          <h1 style={{ margin:0, fontSize:20, fontWeight:800, color:'#1a1208' }}>⚖️ My Final Sanctions</h1>
-          <p style={{ margin:'6px 0 0', fontSize:13, color:'#888' }}>Finalized disciplinary outcomes on your record. Your chance to explain happens during the related incident report's Investigation stage.</p>
+      <div style={{ flex:1, overflow:'auto', padding:'16px 20px' }}>
+        <div style={{ background:'#e8f0fb', border:'1px solid #b8cff5', borderRadius:8, padding:'10px 12px', fontSize:11, color:'#2d5a8a', lineHeight:1.5, marginBottom:14 }}>
+          Your chance to explain happens during the related incident report's Investigation stage — see Incident Report → Reports Involving Me. What's shown here are finalized outcomes only.
         </div>
 
         {loading ? (
-          <div style={{ textAlign:'center', padding:60, color:'#888' }}>Loading…</div>
+          <div style={{ textAlign:'center', padding:'60px', color:'#7a6a50' }}>Loading…</div>
         ) : sanctions.length === 0 ? (
-          <div style={{ textAlign:'center', padding:60 }}>
+          <div style={{ textAlign:'center', padding:'60px', background:'white', border:'1px solid #d8cebb', borderRadius:13 }}>
             <div style={{ fontSize:40, marginBottom:12 }}>✅</div>
-            <div style={{ fontSize:15, fontWeight:700, color:'#1a1208', marginBottom:6 }}>Clean record</div>
-            <div style={{ fontSize:13, color:'#888' }}>No sanctions on file. Keep it up! 💚</div>
+            <div style={{ fontFamily:"'Montserrat',sans-serif", fontSize:15, fontWeight:700, marginBottom:6 }}>Clean record</div>
+            <div style={{ fontSize:12, color:'#7a6a50' }}>No sanctions on file. Keep it up! 💚</div>
           </div>
         ) : (
-          <div>
-            <div style={{ fontSize:12, fontWeight:700, color:'#888', marginBottom:12, textTransform:'uppercase', letterSpacing:1 }}>Final Sanctions ({sanctions.length})</div>
-            {sanctions.map(s => <SanctionCard key={s.id} s={s} />)}
-          </div>
-        )}
-
-        {/* Detail drawer */}
-        {selected && (
-          <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:1000, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
-            <div style={{ background:'#fffdf9', borderRadius:'16px 16px 0 0', width:'100%', maxWidth:640, maxHeight:'85vh', overflowY:'auto', padding:24 }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
-                <h2 style={{ margin:0, fontSize:16, fontWeight:700, color:'#1a1208' }}>Final Sanction Detail</h2>
-                <button onClick={() => setSelected(null)} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#888' }}>×</button>
-              </div>
-
-              <div style={{ fontSize:11, fontWeight:700, color:'#bbb', fontFamily:'monospace', marginBottom:4 }}>{selected.violation_code}</div>
-              <div style={{ fontSize:15, fontWeight:700, color:'#1a1208', marginBottom:4 }}>{selected.violation_title}</div>
-              <div style={{ fontSize:12, color:'#888', marginBottom:16 }}>{selected.category} · {selected.severity} · {selected.offense_number}{['st','nd','rd','th','th'][selected.offense_number-1]} Offense</div>
-
-              {/* Status */}
-              {(() => {
-                const st = STATUS_STYLE[selected.status] || DEFAULT_STATUS_STYLE
-                return <div style={{ background:st.bg, color:st.color, borderRadius:8, padding:'10px 14px', fontSize:13, fontWeight:600, marginBottom:16 }}>{st.label}</div>
-              })()}
-
-              {selected.sanction_type && (
-                <div style={{ background:'#fde8ee', borderRadius:8, padding:12, marginBottom:16, fontSize:13 }}>
-                  <div style={{ fontWeight:700, color:'#c0392b', marginBottom:2 }}>Final Sanction Issued</div>
-                  <div style={{ color:'#1a1208' }}>{selected.sanction_type}</div>
-                  {selected.suspension_days && (
-                    <div style={{ fontSize:12, color:'#c0392b', marginTop:4 }}>
-                      {selected.suspension_days}-day suspension
-                      {selected.suspension_start ? ` · Starts ${fmtDate(selected.suspension_start)}` : ''}
-                      {selected.suspension_end ? ` · Ends ${fmtDate(selected.suspension_end)}` : ''}
-                    </div>
-                  )}
-                  <div style={{ fontSize:11, color:'#888', marginTop:8 }}>Issued {fmtDT(selected.created_at)}</div>
-                </div>
-              )}
-
-              {selected.admin_notes && (
-                <div style={{ background:'#f5f0e8', borderRadius:8, padding:12, marginBottom:16, fontSize:12, color:'#5a4a3a', lineHeight:1.6 }}>
-                  <div style={{ fontWeight:700, color:'#5a4a3a', marginBottom:4 }}>Notes</div>
-                  {selected.admin_notes}
-                </div>
-              )}
-            </div>
-          </div>
+          sanctions.map(s => <SanctionCard key={s.id} s={s} />)
         )}
       </div>
     </PortalShell>
