@@ -73,7 +73,7 @@ export default function PortalShell({ children }) {
     { href: '/portal/payslip',            icon: '💸', label: 'My Payslips' },
     { href: '/portal/contracts',          icon: '📄', label: 'My Contracts', badge: pendingContracts },
     { href: '/portal/files',              icon: '📁', label: 'My Files · 201' },
-    { href: '/portal/sanctions',          icon: '⚖️', label: 'My Sanctions' },
+    { href: '/portal/sanctions',          icon: '⚖️', label: 'My Final Sanctions' },
     { href: '/portal/handbook',           icon: '📖', label: 'Handbook' },
 
     { href: '/portal/notifications',      icon: '🔔', label: 'Notifications', badge: unreadCount },
