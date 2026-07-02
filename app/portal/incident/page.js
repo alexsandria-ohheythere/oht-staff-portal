@@ -253,6 +253,7 @@ export default function IncidentReportPage() {
         violation_code: form.violation_code || null,
         description: form.description,
         persons_involved: personsStr,
+        persons_involved_ids: personsSelected.join(', ') || null,
         witnesses: witnessStr || null,
         resolution: form.resolution || null,
         photo_url,
