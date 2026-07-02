@@ -21,11 +21,11 @@ const VIOLATION_CATEGORIES = ['Attendance','Shift Coverage','Conduct','Dress Cod
 // Staff only ever see this progress tracker — never the notes/content behind each stage —
 // except during Investigation (their chance to explain) and once Final Sanction is reached.
 const STAGES = [
-  { key: 'hr_review',      label: 'HR Review',      num: 1 },
-  { key: 'mgt_review',     label: 'Mgt. Review',    num: 2 },
-  { key: 'investigation',  label: 'Investigation',  num: 3 },
-  { key: 'final_sanction', label: 'Final Sanction', num: 4 },
-  { key: 'closed',         label: 'Closed',         num: 5 },
+  { key: 'hr_review',      label: 'HR Review',      num: 1, color:'#7a3a8a', bg:'#f5eeff' },
+  { key: 'mgt_review',     label: 'Mgt. Review',    num: 2, color:'#2d5a8a', bg:'#e8f0fb' },
+  { key: 'investigation',  label: 'Investigation',  num: 3, color:'#a06000', bg:'#fef3e2' },
+  { key: 'final_sanction', label: 'Final Sanction', num: 4, color:'#c0392b', bg:'#fde8ee' },
+  { key: 'closed',         label: 'Closed',         num: 5, color:'#4a7a1e', bg:'#eef7e4' },
 ]
 const STAGE_MAP = Object.fromEntries(STAGES.map(s => [s.key, s]))
 
@@ -809,16 +809,22 @@ export default function IncidentReportPage() {
                     const isEditingThis = editingExplanation === r.id
                     const canSeeViolation = ['investigation', 'final_sanction', 'closed'].includes(stage)
                     const cardTitle = canSeeViolation ? (r.hr_violation || r.incident_type || 'Incident Report') : 'Incident Report'
+                    const stageInfo = STAGE_MAP[stage] || STAGE_MAP.hr_review
                     return (
                       <div key={r.id} style={{ background:'white', borderRadius:12, border:'1px solid #e5e0d8', padding:'14px 16px' }}>
                         <div
                           onClick={() => setExpandedInvolving(isExpanded ? null : r.id)}
-                          style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer' }}>
+                          style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', gap:10 }}>
                           <div>
                             <div style={{ fontSize:13, fontWeight:700, color:'#1a1208' }}>{cardTitle}</div>
                             <div style={{ fontSize:11, color:'#9a8a7a', marginTop:2 }}>Filed {fmtDatetime(r.created_at)}</div>
                           </div>
-                          <span style={{ fontSize:11, color:'#7a6a50' }}>{isExpanded ? '▲' : '▼'}</span>
+                          <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
+                            <span style={{ background:stageInfo.bg, color:stageInfo.color, borderRadius:20, padding:'3px 10px', fontSize:10, fontWeight:700, whiteSpace:'nowrap' }}>
+                              {stageInfo.label}
+                            </span>
+                            <span style={{ fontSize:11, color:'#7a6a50' }}>{isExpanded ? '▲' : '▼'}</span>
+                          </div>
                         </div>
 
                         {isExpanded && (
