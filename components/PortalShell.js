@@ -10,6 +10,8 @@ export default function PortalShell({ children }) {
   const [checked, setChecked]         = useState(false)
   const [unreadCount, setUnread]      = useState(0)
   const [pendingContracts, setPending]= useState(0)
+  const [jobOrdersTodo, setJobOrdersTodo] = useState(0)
+  const [incidentAction, setIncidentAction] = useState(0)
   const [drawerOpen, setDrawerOpen]   = useState(false)
 
   useEffect(() => {
@@ -21,12 +23,23 @@ export default function PortalShell({ children }) {
         if (data) {
           setName(data.nickname || data.first_name || session.user.email.split('@')[0])
           setRole(data.role || '')
-          const [{ count: notifCount }, { count: contractCount }] = await Promise.all([
+          const [{ count: notifCount }, { count: contractCount }, { count: jobOrderCount }, { data: invReports }] = await Promise.all([
             supabase.from('notifications').select('*', { count:'exact', head:true }).eq('staff_id', data.id).eq('is_read', false),
             supabase.from('contracts').select('*', { count:'exact', head:true }).eq('staff_id', data.id).eq('status', 'pending_signature'),
+            supabase.from('tasks').select('*', { count:'exact', head:true }).eq('assigned_to', data.id).eq('status', 'todo'),
+            // Reports at Investigation naming this staff member — used below to count
+            // how many still need their explanation submitted.
+            supabase.from('incident_reports').select('id, staff_explanations').eq('stage', 'investigation').ilike('persons_involved_ids', `%${data.id}%`),
           ])
           setUnread(notifCount || 0)
           setPending(contractCount || 0)
+          setJobOrdersTodo(jobOrderCount || 0)
+          const needsExplanation = (invReports || []).filter(r => {
+            let list = []
+            try { list = r.staff_explanations ? JSON.parse(r.staff_explanations) : [] } catch { list = [] }
+            return !list.some(e => e.staff_id === data.id)
+          }).length
+          setIncidentAction(needsExplanation)
         } else {
           setName(session.user.email.split('@')[0])
         }
@@ -51,7 +64,7 @@ export default function PortalShell({ children }) {
     { href: '/portal/team',               icon: '📅', label: 'Team Schedule' },
     { href: '/portal/schedule',           icon: '🗓️', label: 'My Schedule' },
     { href: '/portal/tasks',              icon: '✔️', label: 'Daily Check-In' },
-    { href: '/portal/joborders',          icon: '📋', label: 'Job Orders' },
+    { href: '/portal/joborders',          icon: '📋', label: 'Job Orders', badge: jobOrdersTodo },
     ...(isCashier ? [
       { href: '/portal/cashout',          icon: '🧾', label: 'Cashout Entry' },
     ] : []),
@@ -63,7 +76,7 @@ export default function PortalShell({ children }) {
     { href: '/portal/recipes',        icon: '📒', label: 'Recipes' },
     
     { type: 'section', label: 'Forms' },
-    { href: '/portal/incident',           icon: '⚠️', label: 'Incident Report' },
+    { href: '/portal/incident',           icon: '⚠️', label: 'Incident Report', badge: incidentAction },
     { href: '/portal/wastage',            icon: '🗑️', label: 'Wastage Report' },
     { href: '/portal/leave',              icon: '📤', label: 'Request Leave' },
     { href: '/portal/overtime',           icon: '⏰', label: 'Request Overtime' },
