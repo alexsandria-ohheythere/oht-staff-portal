@@ -79,6 +79,28 @@ function MiniStageProgress({ stage }) {
   )
 }
 
+// Standard violation summary shown from Mgt. Review onward — same 3-field format
+// everywhere it appears: what category this falls under, the specific handbook
+// violation, and confirmation of which staff member it names.
+function ViolationBlock({ typeOfViolation, violation, violatorName }) {
+  const field = (label, value) => (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ fontSize:9, fontWeight:700, color:'#a06000', textTransform:'uppercase', letterSpacing:0.6, marginBottom:2 }}>{label}</div>
+      <div style={{ fontSize:12, color:'#3a2a1a' }}>{value || '—'}</div>
+    </div>
+  )
+  return (
+    <div style={{ background:'#fef3e2', border:'1px solid #f5d78e', borderRadius:8, padding:'10px 12px' }}>
+      {field('Type of Violation', typeOfViolation)}
+      {field('Violation', violation)}
+      <div>
+        <div style={{ fontSize:9, fontWeight:700, color:'#a06000', textTransform:'uppercase', letterSpacing:0.6, marginBottom:2 }}>Name of Violator</div>
+        <div style={{ fontSize:12, color:'#3a2a1a' }}>{violatorName || '—'}</div>
+      </div>
+    </div>
+  )
+}
+
 const STATUS_STYLE = {
   pending:  { bg:'#fef3e2', color:'#a06000', label:'Pending Review' },
   reviewed: { bg:'#e8f0fb', color:'#2d5a8a', label:'Reviewed' },
@@ -811,7 +833,7 @@ export default function IncidentReportPage() {
                     const explanations = parseExplanations(r.staff_explanations)
                     const mine = explanations.find(e => e.staff_id === staff?.id)
                     const isEditingThis = editingExplanation === r.id
-                    const canSeeViolation = ['investigation', 'final_sanction', 'closed'].includes(stage)
+                    const canSeeViolation = ['mgt_review', 'investigation', 'final_sanction', 'closed'].includes(stage)
                     const cardTitle = canSeeViolation ? (r.hr_violation || r.incident_type || 'Incident Report') : 'Incident Report'
                     const stageInfo = STAGE_MAP[stage] || STAGE_MAP.hr_review
                     return (
@@ -835,31 +857,40 @@ export default function IncidentReportPage() {
                           <div style={{ borderTop:'1px solid #f0ede8', marginTop:12, paddingTop:4 }}>
                             <MiniStageProgress stage={stage} />
 
-                            {(stage === 'hr_review' || stage === 'mgt_review') && (
+                            {stage === 'hr_review' && (
                               <div style={{ fontSize:12, color:'#7a6a50', lineHeight:1.6, marginTop:6 }}>
                                 This report is under review. You'll be able to share your side once it reaches the Investigation stage.
                               </div>
                             )}
 
+                            {stage === 'mgt_review' && (
+                              <div style={{ marginTop:6 }}>
+                                <ViolationBlock
+                                  typeOfViolation={r.incident_type}
+                                  violation={r.hr_violation || 'Not yet tagged'}
+                                  violatorName={staff ? `${staff.first_name} ${staff.last_name}` : ''}
+                                />
+                                {r.mgt_case_summary && (
+                                  <div style={{ fontSize:12, color:'#3a2a1a', lineHeight:1.5, background:'#f5f0e8', borderRadius:8, padding:'10px 12px', marginTop:10 }}>
+                                    {r.mgt_case_summary}
+                                  </div>
+                                )}
+                                <div style={{ fontSize:12, color:'#7a6a50', lineHeight:1.6, marginTop:10 }}>
+                                  Management is reviewing this report to decide whether it proceeds to formal investigation.
+                                </div>
+                              </div>
+                            )}
+
                             {stage === 'investigation' && (
                               <div style={{ marginTop:6 }}>
-                                {(r.incident_type || r.hr_violation || r.mgt_case_summary) && (
-                                  <div style={{ background:'#fef3e2', border:'1px solid #f5d78e', borderRadius:8, padding:'10px 12px', marginBottom:10 }}>
-                                    <div style={{ fontSize:11, fontWeight:700, color:'#a06000', marginBottom:2 }}>What This Is About</div>
-                                    {r.incident_type && (
-                                      <div style={{ fontSize:12, color:'#3a2a1a' }}>Category: {r.incident_type}</div>
-                                    )}
-                                    {r.hr_violation && (
-                                      <div style={{ fontSize:12, color:'#3a2a1a', marginTop: r.incident_type ? 2 : 0 }}>Handbook Violation: {r.hr_violation}</div>
-                                    )}
-                                    {!r.hr_violation && (
-                                      <div style={{ fontSize:11, color:'#a06000', marginTop:4 }}>A specific handbook violation hasn't been tagged yet.</div>
-                                    )}
-                                    {r.mgt_case_summary && (
-                                      <div style={{ fontSize:12, color:'#3a2a1a', lineHeight:1.5, marginTop:8, paddingTop:8, borderTop:'1px solid #f0dba8' }}>
-                                        {r.mgt_case_summary}
-                                      </div>
-                                    )}
+                                <ViolationBlock
+                                  typeOfViolation={r.incident_type}
+                                  violation={r.hr_violation || 'Not yet tagged'}
+                                  violatorName={staff ? `${staff.first_name} ${staff.last_name}` : ''}
+                                />
+                                {r.mgt_case_summary && (
+                                  <div style={{ fontSize:12, color:'#3a2a1a', lineHeight:1.5, background:'#f5f0e8', borderRadius:8, padding:'10px 12px', marginTop:10, marginBottom:10 }}>
+                                    {r.mgt_case_summary}
                                   </div>
                                 )}
                                 {mine && !isEditingThis ? (
@@ -906,19 +937,18 @@ export default function IncidentReportPage() {
                                   <div style={{ fontSize:12, color:'#7a6a50', lineHeight:1.6, marginBottom:10 }}>
                                     {expStatus === 'locked'
                                       ? 'Management has finalized a decision on this report.'
-                                      : 'Management is finalizing a decision on this report. Here\'s the violation being considered:'}
+                                      : 'Management is finalizing a decision on this report.'}
                                   </div>
-                                  {r.handbook_ref && (
-                                    <div style={{ background:'#fde8ee', borderRadius:8, padding:'10px 12px', marginBottom:10 }}>
-                                      <div style={{ fontSize:11, fontWeight:700, color:'#c0392b', marginBottom:2 }}>Violation</div>
-                                      <div style={{ fontSize:12, color:'#1a1208' }}>{r.handbook_ref}</div>
-                                      {r.offense_num && (
-                                        <div style={{ fontSize:11, color:'#7a6a50', marginTop:2 }}>{r.offense_num} Offense</div>
-                                      )}
-                                    </div>
+                                  <ViolationBlock
+                                    typeOfViolation={r.incident_type}
+                                    violation={r.handbook_ref || r.hr_violation || 'Not yet tagged'}
+                                    violatorName={staff ? `${staff.first_name} ${staff.last_name}` : ''}
+                                  />
+                                  {r.offense_num && (
+                                    <div style={{ fontSize:11, color:'#7a6a50', marginTop:6 }}>{r.offense_num} Offense</div>
                                   )}
                                   {r.mgt_case_summary && (
-                                    <div style={{ background:'#fef3e2', border:'1px solid #f5d78e', borderRadius:8, padding:'10px 12px', marginBottom:10, fontSize:12, color:'#3a2a1a', lineHeight:1.5 }}>
+                                    <div style={{ background:'#f5f0e8', borderRadius:8, padding:'10px 12px', marginTop:10, marginBottom:10, fontSize:12, color:'#3a2a1a', lineHeight:1.5 }}>
                                       {r.mgt_case_summary}
                                     </div>
                                   )}
@@ -976,17 +1006,16 @@ export default function IncidentReportPage() {
 
                             {stage === 'closed' && (
                               <div style={{ marginTop:6 }}>
-                                {r.handbook_ref && (
-                                  <div style={{ background:'#f5f0e8', borderRadius:8, padding:'10px 12px', marginBottom:10 }}>
-                                    <div style={{ fontSize:11, fontWeight:700, color:'#5a4a3a', marginBottom:2 }}>Violation Reviewed</div>
-                                    <div style={{ fontSize:12, color:'#3a2a1a' }}>{r.handbook_ref}</div>
-                                    {r.offense_num && (
-                                      <div style={{ fontSize:11, color:'#7a6a50', marginTop:2 }}>{r.offense_num} Offense</div>
-                                    )}
-                                  </div>
+                                <ViolationBlock
+                                  typeOfViolation={r.incident_type}
+                                  violation={r.handbook_ref || r.hr_violation || 'Not yet tagged'}
+                                  violatorName={staff ? `${staff.first_name} ${staff.last_name}` : ''}
+                                />
+                                {r.offense_num && (
+                                  <div style={{ fontSize:11, color:'#7a6a50', marginTop:6, marginBottom:10 }}>{r.offense_num} Offense</div>
                                 )}
                                 {mine && (
-                                  <div style={{ marginBottom:10 }}>
+                                  <div style={{ marginBottom:10, marginTop:10 }}>
                                     <div style={{ fontSize:11, fontWeight:700, color:'#5a4a3a', marginBottom:4 }}>
                                       Your Explanation — submitted {fmtDatetime(mine.submitted_at)}
                                     </div>
