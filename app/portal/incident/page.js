@@ -251,7 +251,7 @@ export default function IncidentReportPage() {
         // UUIDs are unique.
         const { data: invR } = await supabase
           .from('incident_reports')
-          .select('id, stage, created_at, persons_involved_ids, staff_explanations')
+          .select('id, stage, created_at, persons_involved_ids, staff_explanations, handbook_ref, offense_num, sanctioned_staff_ids')
           .ilike('persons_involved_ids', `%${s.id}%`)
           .order('created_at', { ascending: false })
         setInvolvingReports(invR || [])
@@ -855,8 +855,44 @@ export default function IncidentReportPage() {
                               </div>
                             )}
 
-                            {(stage === 'final_sanction' || stage === 'closed') && (
+                            {stage === 'final_sanction' && (
                               <div style={{ marginTop:6 }}>
+                                <div style={{ fontSize:12, color:'#7a6a50', lineHeight:1.6, marginBottom:10 }}>
+                                  Management is finalizing a decision on this report. Here's the violation being considered:
+                                </div>
+                                {r.handbook_ref && (
+                                  <div style={{ background:'#fde8ee', borderRadius:8, padding:'10px 12px', marginBottom:10 }}>
+                                    <div style={{ fontSize:11, fontWeight:700, color:'#c0392b', marginBottom:2 }}>Violation</div>
+                                    <div style={{ fontSize:12, color:'#1a1208' }}>{r.handbook_ref}</div>
+                                    {r.offense_num && (
+                                      <div style={{ fontSize:11, color:'#7a6a50', marginTop:2 }}>{r.offense_num} Offense</div>
+                                    )}
+                                  </div>
+                                )}
+                                {mine && (
+                                  <div>
+                                    <div style={{ fontSize:11, fontWeight:700, color:'#5a4a3a', marginBottom:4 }}>
+                                      Your Explanation — submitted {fmtDatetime(mine.submitted_at)}
+                                    </div>
+                                    <div style={{ background:'#f5f0e8', borderRadius:8, padding:'10px 12px', fontSize:12, color:'#3a2a1a', lineHeight:1.6, whiteSpace:'pre-wrap' }}>
+                                      {mine.text}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {stage === 'closed' && (
+                              <div style={{ marginTop:6 }}>
+                                {r.handbook_ref && (
+                                  <div style={{ background:'#f5f0e8', borderRadius:8, padding:'10px 12px', marginBottom:10 }}>
+                                    <div style={{ fontSize:11, fontWeight:700, color:'#5a4a3a', marginBottom:2 }}>Violation Reviewed</div>
+                                    <div style={{ fontSize:12, color:'#3a2a1a' }}>{r.handbook_ref}</div>
+                                    {r.offense_num && (
+                                      <div style={{ fontSize:11, color:'#7a6a50', marginTop:2 }}>{r.offense_num} Offense</div>
+                                    )}
+                                  </div>
+                                )}
                                 {mine && (
                                   <div style={{ marginBottom:10 }}>
                                     <div style={{ fontSize:11, fontWeight:700, color:'#5a4a3a', marginBottom:4 }}>
@@ -867,9 +903,15 @@ export default function IncidentReportPage() {
                                     </div>
                                   </div>
                                 )}
-                                <div style={{ background:'#fde8ee', border:'1px solid #f5b8ca', borderRadius:8, padding:'10px 12px', fontSize:12, color:'#c0392b', lineHeight:1.6 }}>
-                                  This case has been finalized. Check <strong>My Sanctions</strong> for any resulting outcome.
-                                </div>
+                                {(r.sanctioned_staff_ids || '').includes(staff?.id) ? (
+                                  <div style={{ background:'#fde8ee', border:'1px solid #f5b8ca', borderRadius:8, padding:'10px 12px', fontSize:12, color:'#c0392b', lineHeight:1.6 }}>
+                                    This case has been closed with a final sanction against you. Check <strong>My Final Sanctions</strong> for details.
+                                  </div>
+                                ) : (
+                                  <div style={{ background:'#eef7e4', border:'1px solid #cfe8b8', borderRadius:8, padding:'10px 12px', fontSize:12, color:'#4a7a1e', lineHeight:1.6 }}>
+                                    This case has been closed. No sanction was issued against you.
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
