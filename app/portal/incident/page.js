@@ -267,7 +267,10 @@ export default function IncidentReportPage() {
           .select('id, stage, created_at, persons_involved_ids, staff_explanations, handbook_ref, offense_num, sanctioned_staff_ids, hr_violation, incident_type, sanction_type, mgt_case_summary')
           .ilike('persons_involved_ids', `%${s.id}%`)
           .order('created_at', { ascending: false })
-        setInvolvingReports(invR || [])
+        // Reports still at HR Review are completely hidden — HR may dismiss it before
+        // it ever becomes a real matter, and the employee shouldn't know a report exists
+        // until it's escalated. This protects both HR's initial screening and the reporter.
+        setInvolvingReports((invR || []).filter(r => (r.stage || 'hr_review') !== 'hr_review'))
       }
     } catch(e) { console.error(e) }
     setLoading(false)
@@ -323,7 +326,7 @@ export default function IncidentReportPage() {
       const personsStr = personsSelected.map(id => { const s = allStaff.find(x => x.id === id); return s ? `${s.first_name} ${s.last_name} (${s.role || 'Staff'})` : id }).join(', ')
       const witnessStr = witnessSelected.map(id => { const s = allStaff.find(x => x.id === id); return s ? `${s.first_name} ${s.last_name} (${s.role || 'Staff'})` : id }).join(', ')
 
-      const { error } = await supabase.from('incident_reports').insert([{
+      const { data: insertedReport, error } = await supabase.from('incident_reports').insert([{
         staff_id: staff?.id || null,
         date_of_report: form.date_of_report,
         time_of_report: form.time_of_report,
@@ -340,7 +343,7 @@ export default function IncidentReportPage() {
         declaration_name: form.declaration_name,
         declaration_date: form.declaration_date,
         status: 'pending',
-      }])
+      }]).select('id').single()
 
       if (error) { showToast('❌', error.message); setSaving(false); return }
 
@@ -353,6 +356,7 @@ export default function IncidentReportPage() {
         // The file_url links to the photo; if no photo, we use a data URI placeholder
         const fileEntry = {
           staff_id: staff.id,
+          incident_report_id: insertedReport?.id || null,
           file_name: fileName,
           file_url: photo_url || '',
           file_type: photo_url ? 'image' : 'text/plain',
