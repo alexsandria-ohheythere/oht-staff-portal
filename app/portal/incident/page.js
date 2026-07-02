@@ -251,7 +251,7 @@ export default function IncidentReportPage() {
         // UUIDs are unique.
         const { data: invR } = await supabase
           .from('incident_reports')
-          .select('id, stage, created_at, persons_involved_ids, staff_explanations, handbook_ref, offense_num, sanctioned_staff_ids')
+          .select('id, stage, created_at, persons_involved_ids, staff_explanations, handbook_ref, offense_num, sanctioned_staff_ids, hr_violation, incident_type')
           .ilike('persons_involved_ids', `%${s.id}%`)
           .order('created_at', { ascending: false })
         setInvolvingReports(invR || [])
@@ -818,6 +818,20 @@ export default function IncidentReportPage() {
 
                             {stage === 'investigation' && (
                               <div style={{ marginTop:6 }}>
+                                {(r.incident_type || r.hr_violation) && (
+                                  <div style={{ background:'#fef3e2', border:'1px solid #f5d78e', borderRadius:8, padding:'10px 12px', marginBottom:10 }}>
+                                    <div style={{ fontSize:11, fontWeight:700, color:'#a06000', marginBottom:2 }}>What This Is About</div>
+                                    {r.incident_type && (
+                                      <div style={{ fontSize:12, color:'#3a2a1a' }}>Category: {r.incident_type}</div>
+                                    )}
+                                    {r.hr_violation && (
+                                      <div style={{ fontSize:12, color:'#3a2a1a', marginTop: r.incident_type ? 2 : 0 }}>Handbook Violation: {r.hr_violation}</div>
+                                    )}
+                                    {!r.hr_violation && (
+                                      <div style={{ fontSize:11, color:'#a06000', marginTop:4 }}>A specific handbook violation hasn't been tagged yet.</div>
+                                    )}
+                                  </div>
+                                )}
                                 {mine && !isEditingThis ? (
                                   <div>
                                     <div style={{ fontSize:11, fontWeight:700, color:'#5a4a3a', marginBottom:4 }}>
