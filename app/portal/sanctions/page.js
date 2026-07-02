@@ -138,10 +138,6 @@ export default function MyFinalSanctionsPage() {
                   {selected.admin_notes}
                 </div>
               )}
-
-              <div style={{ background:'#e8f0fb', border:'1px solid #b8cff5', borderRadius:8, padding:12, fontSize:12, color:'#2d5a8a', lineHeight:1.6 }}>
-                If you believe this sanction was issued in error, speak directly with HR or Management. All concerns are handled confidentially.
-              </div>
             </div>
           </div>
         )}
