@@ -244,13 +244,14 @@ export default function IncidentReportPage() {
           .order('created_at', { ascending: false })
         setMyReports(rpts || [])
 
-        // Reports naming this staff member as a person involved (not the filer).
-        // Matches by ID substring since persons_involved_ids is a plain comma-joined
-        // text field rather than a relational array — safe given UUIDs are unique.
+        // Reports naming this staff member as a person involved — including reports
+        // they filed themselves but also named themselves in (e.g. reporting their own
+        // involvement in something). Matches by ID substring since persons_involved_ids
+        // is a plain comma-joined text field rather than a relational array — safe given
+        // UUIDs are unique.
         const { data: invR } = await supabase
           .from('incident_reports')
           .select('id, stage, created_at, persons_involved_ids, staff_explanations')
-          .neq('staff_id', s.id)
           .ilike('persons_involved_ids', `%${s.id}%`)
           .order('created_at', { ascending: false })
         setInvolvingReports(invR || [])
