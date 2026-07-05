@@ -45,6 +45,7 @@ const ISSUE_DISPLAY_LABELS = { payroll_correction: 'Payroll correction (admin-in
 const issueLabelFor = issueType => ISSUE_OPTIONS.find(o => o.value === issueType)?.label || ISSUE_DISPLAY_LABELS[issueType] || issueType
 const todayISO = () => new Date().toISOString().split('T')[0]
 const fmtDate = iso => new Date(iso + 'T00:00:00').toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' })
+const peso = n => '₱' + (parseFloat(n) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 export default function TimesheetAdjustmentPage() {
   const [staffId, setStaffId]         = useState(null)
@@ -138,7 +139,7 @@ export default function TimesheetAdjustmentPage() {
         : <span style={pillStyle('#eef7e4', '#4a7a1e')}>✓ Approved — will be corrected</span>
     }
     if (req.resolution === 'refund') {
-      const amt = '₱' + Math.round(req.refund_amount || 0).toLocaleString('en-PH')
+      const amt = peso(req.refund_amount || 0)
       return req.applied
         ? <span style={pillStyle('#eef7e4', '#4a7a1e')}>✓ {amt} refunded</span>
         : <span style={pillStyle('#eef7e4', '#4a7a1e')}>✓ {amt} refund — next payslip</span>
@@ -236,16 +237,16 @@ export default function TimesheetAdjustmentPage() {
                         <div style={{ marginTop: 8, background: '#f6faf3', border: '1px solid #d9ecc7', borderRadius: 10, padding: '10px 12px' }}>
                           <div style={{ fontSize: 11, fontWeight: 700, color: '#4a7a1e' }}>How this amount was worked out</div>
                           <div style={{ fontSize: 11, color: '#4b5563', marginTop: 4 }}>
-                            You were originally paid for {r.calc_original_paid_hours}h ({r.calc_original_late_mins}m marked late) on this shift. Once corrected, it's {r.calc_corrected_paid_hours}h ({r.calc_corrected_late_mins}m late), at ₱{r.calc_hourly_rate}/hr.
+                            You were originally paid for {r.calc_original_paid_hours}h ({r.calc_original_late_mins}m marked late) on this shift. Once corrected, it's {r.calc_corrected_paid_hours}h ({r.calc_corrected_late_mins}m late), at {peso(r.calc_hourly_rate)}/hr.
                           </div>
                           <div style={{ fontSize: 11, color: '#4b5563', marginTop: 4 }}>
-                            Late deduction adjusted: ₱{Math.round(r.calc_recorded_late_deduction)} → ₱{Math.round(r.calc_supposed_late_deduction)} (₱{Math.round(r.calc_late_refund)} back)
+                            Late deduction adjusted: {peso(r.calc_recorded_late_deduction)} → {peso(r.calc_supposed_late_deduction)} ({peso(r.calc_late_refund)} back)
                           </div>
                           <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2 }}>
-                            Extra hours credited: ₱{Math.round(r.calc_extra_hours_credit)}
+                            Extra hours credited: {peso(r.calc_extra_hours_credit)}
                           </div>
                           <div style={{ fontSize: 12, fontWeight: 700, color: '#4a7a1e', marginTop: 6 }}>
-                            Total: ₱{Math.round(r.refund_amount).toLocaleString('en-PH')}
+                            Total: {peso(r.refund_amount)}
                           </div>
                         </div>
                       )}
