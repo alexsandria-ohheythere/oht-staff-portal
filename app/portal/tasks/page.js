@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
 import PortalShell from '../../../components/PortalShell'
 import { createClient } from '../../../lib/supabase'
+import { syncRecurringTasksForDate } from '../../../lib/recurringTaskSync'
 
 const toISO = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 const fmtTime = ts => ts ? new Date(ts).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}) : ''
@@ -35,6 +36,7 @@ function ScoreRing({ pct, color, size=64 }) {
 export default function MyTasks() {
   const [staff, setStaff]     = useState(null)
   const [tasks, setTasks]     = useState([])
+  const [recurringTasks, setRecurringTasks] = useState([])
   const [shifts, setShifts]   = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(null)
@@ -52,6 +54,10 @@ export default function MyTasks() {
     const channel = supabase
       .channel(`staff-checkin-realtime-${staff.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_task_assignments', filter: `staff_id=eq.${staff.id}` }, () => {
+        const s2 = createClient()
+        loadData(s2, staff.id)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'recurring_task_assignments', filter: `staff_id=eq.${staff.id}` }, () => {
         const s2 = createClient()
         loadData(s2, staff.id)
       })
@@ -104,7 +110,10 @@ export default function MyTasks() {
 
   async function loadData(supabase, staffId) {
     try {
-      const [{ data: t, error: tErr }, { data: sh, error: shErr }] = await Promise.all([
+      // Auto-populate this staffer's weekly recurring tasks for today (no-op if already synced)
+      await syncRecurringTasksForDate(supabase, today, staffId)
+
+      const [{ data: t, error: tErr }, { data: sh, error: shErr }, { data: rt, error: rtErr }] = await Promise.all([
         supabase
           .from('shift_task_assignments')
           .select('*, role_tasks!shift_task_assignments_task_id_fkey(task_name, category)')
@@ -116,13 +125,21 @@ export default function MyTasks() {
           .select('*')
           .eq('staff_id', staffId)
           .eq('shift_date', today),
+        supabase
+          .from('recurring_task_assignments')
+          .select('*, recurring_tasks(task_name, category, description)')
+          .eq('staff_id', staffId)
+          .eq('shift_date', today)
+          .order('created_at'),
       ])
 
       if (tErr) setError(`Tasks error: ${tErr.message}`)
       if (shErr) setError(`Schedule error: ${shErr.message}`)
+      if (rtErr) setError(`Recurring tasks error: ${rtErr.message}`)
 
       setTasks(t || [])
       setShifts(sh || [])
+      setRecurringTasks(rt || [])
     } catch(e) {
       setError(e.message)
     }
@@ -135,6 +152,15 @@ export default function MyTasks() {
     const completed_at = completed ? new Date().toISOString() : null
     const { data } = await supabase.from('shift_task_assignments').update({ completed, completed_at }).eq('id', id).select().single()
     if (data) setTasks(prev => prev.map(t => t.id === id ? data : t))
+    setSaving(null)
+  }
+
+  async function toggleRecurringTask(id, completed) {
+    setSaving(id)
+    const supabase = createClient()
+    const completed_at = completed ? new Date().toISOString() : null
+    const { data } = await supabase.from('recurring_task_assignments').update({ completed, completed_at }).eq('id', id).select('*, recurring_tasks(task_name, category, description)').single()
+    if (data) setRecurringTasks(prev => prev.map(t => t.id === id ? data : t))
     setSaving(null)
   }
 
@@ -201,12 +227,52 @@ export default function MyTasks() {
             {staff && <div style={{ fontSize:11, color:'#9ca3af', marginTop:8 }}>Logged in as: {staff.email}</div>}
           </div>
 
-        ) : totalTasks === 0 ? (
+        ) : totalTasks === 0 && recurringTasks.length === 0 ? (
           <div style={{ textAlign:'center', padding:'60px', background:'white', border:'1px solid #d8cebb', borderRadius:13 }}>
             <div style={{ fontSize:40, marginBottom:12 }}>📋</div>
             <div style={{ fontFamily:"'Montserrat',sans-serif", fontSize:15, fontWeight:700, marginBottom:6 }}>No tasks assigned yet</div>
             <div style={{ fontSize:12, color:'#7a6a50' }}>Your manager will assign tasks for today's shift.</div>
           </div>
+
+        ) : totalTasks === 0 ? (
+          <>
+            {recurringTasks.length > 0 && (
+              <div style={{ background:'white', border:'1px solid #d8cebb', borderRadius:13, overflow:'hidden', marginBottom:12 }}>
+                <div style={{ background:'#fef3e2', padding:'12px 18px', borderBottom:'1px solid #d4a84344', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                    <span style={{ fontSize:18 }}>🧹</span>
+                    <div style={{ fontSize:12, fontWeight:700, color:'#a06000' }}>Weekly Tasks</div>
+                  </div>
+                  <div style={{ background:'#a06000', color:'white', borderRadius:20, padding:'4px 12px', fontSize:12, fontWeight:700 }}>
+                    {recurringTasks.filter(t=>t.completed).length}/{recurringTasks.length}
+                  </div>
+                </div>
+                {recurringTasks.map((t, idx) => (
+                  <div key={t.id}
+                    onClick={() => saving !== t.id && toggleRecurringTask(t.id, !t.completed)}
+                    style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: idx < recurringTasks.length-1 ? '1px solid #f0ede8' : 'none', background: t.completed?'#f8fdf5':'white', cursor:'pointer', transition:'background .15s', userSelect:'none' }}>
+                    <div style={{ width:26, height:26, borderRadius:'50%', border:`2.5px solid ${t.completed?'#7ab648':'#d4a843'}`, background:t.completed?'#7ab648':'transparent', display:'flex', alignItems:'center', justifyContent:'center', transition:'all .2s', flexShrink:0, opacity:saving===t.id?.5:1 }}>
+                      {t.completed && <span style={{ color:'white', fontSize:13, fontWeight:700 }}>✓</span>}
+                    </div>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:13, fontWeight:t.completed?400:600, color:t.completed?'#7a6a50':'#1a1208', textDecoration:t.completed?'line-through':'none', transition:'all .2s' }}>
+                        {t.recurring_tasks?.task_name || 'Task'}
+                      </div>
+                      {t.recurring_tasks?.description && (
+                        <div style={{ fontSize:11, color:'#7a6a50', marginTop:2 }}>{t.recurring_tasks.description}</div>
+                      )}
+                      {t.completed && t.completed_at && (
+                        <div style={{ fontSize:10, color:'#4a7a1e', marginTop:2, fontFamily:"'DM Mono',monospace", fontWeight:600 }}>
+                          ✓ Done at {fmtTime(t.completed_at)}
+                        </div>
+                      )}
+                    </div>
+                    {!t.completed && <div style={{ fontSize:10, color:'#d8cebb' }}>tap</div>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
 
         ) : (
           <>
@@ -246,6 +312,43 @@ export default function MyTasks() {
                 </div>
               </div>
             </div>
+
+            {recurringTasks.length > 0 && (
+              <div style={{ background:'white', border:'1px solid #d8cebb', borderRadius:13, overflow:'hidden', marginBottom:12 }}>
+                <div style={{ background:'#fef3e2', padding:'12px 18px', borderBottom:'1px solid #d4a84344', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                    <span style={{ fontSize:18 }}>🧹</span>
+                    <div style={{ fontSize:12, fontWeight:700, color:'#a06000' }}>Weekly Tasks</div>
+                  </div>
+                  <div style={{ background:'#a06000', color:'white', borderRadius:20, padding:'4px 12px', fontSize:12, fontWeight:700 }}>
+                    {recurringTasks.filter(t=>t.completed).length}/{recurringTasks.length}
+                  </div>
+                </div>
+                {recurringTasks.map((t, idx) => (
+                  <div key={t.id}
+                    onClick={() => saving !== t.id && toggleRecurringTask(t.id, !t.completed)}
+                    style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: idx < recurringTasks.length-1 ? '1px solid #f0ede8' : 'none', background: t.completed?'#f8fdf5':'white', cursor:'pointer', transition:'background .15s', userSelect:'none' }}>
+                    <div style={{ width:26, height:26, borderRadius:'50%', border:`2.5px solid ${t.completed?'#7ab648':'#d4a843'}`, background:t.completed?'#7ab648':'transparent', display:'flex', alignItems:'center', justifyContent:'center', transition:'all .2s', flexShrink:0, opacity:saving===t.id?.5:1 }}>
+                      {t.completed && <span style={{ color:'white', fontSize:13, fontWeight:700 }}>✓</span>}
+                    </div>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:13, fontWeight:t.completed?400:600, color:t.completed?'#7a6a50':'#1a1208', textDecoration:t.completed?'line-through':'none', transition:'all .2s' }}>
+                        {t.recurring_tasks?.task_name || 'Task'}
+                      </div>
+                      {t.recurring_tasks?.description && (
+                        <div style={{ fontSize:11, color:'#7a6a50', marginTop:2 }}>{t.recurring_tasks.description}</div>
+                      )}
+                      {t.completed && t.completed_at && (
+                        <div style={{ fontSize:10, color:'#4a7a1e', marginTop:2, fontFamily:"'DM Mono',monospace", fontWeight:600 }}>
+                          ✓ Done at {fmtTime(t.completed_at)}
+                        </div>
+                      )}
+                    </div>
+                    {!t.completed && <div style={{ fontSize:10, color:'#d8cebb' }}>tap</div>}
+                  </div>
+                ))}
+              </div>
+            )}
 
             {shiftScores.map(({ shiftId, pct, tasks: shiftTasks }) => {
               const ss = SHIFT_STYLES[shiftId] || SHIFT_STYLES.am
