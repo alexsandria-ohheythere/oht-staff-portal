@@ -80,6 +80,7 @@ export default function PortalShell({ children }) {
     { href: '/portal/wastage',            icon: '🗑️', label: 'Wastage Report' },
     { href: '/portal/leave',              icon: '📤', label: 'Request Leave' },
     { href: '/portal/overtime',           icon: '⏰', label: 'Request Overtime' },
+    { href: '/portal/adjustments',        icon: '🕒', label: 'Timesheet Adjustment' },
 
     { type: 'section', label: 'My Documents' },
     { href: '/portal/profile',            icon: '👤', label: 'My Profile' },
