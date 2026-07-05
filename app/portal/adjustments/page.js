@@ -39,6 +39,10 @@ const ISSUE_OPTIONS = [
   { value: 'wrong_time',      label: 'Wrong time recorded',      hint: 'Time-in or time-out on file is incorrect' },
   { value: 'missed_entirely', label: 'Entire shift missing',     hint: "Shift doesn't appear on the timesheet at all" },
 ]
+// Admin-initiated corrections (e.g. a payroll formula fix) aren't staff-filable, so they're not
+// in ISSUE_OPTIONS above, but still need a friendly label when shown in the history list.
+const ISSUE_DISPLAY_LABELS = { payroll_correction: 'Payroll correction (admin-initiated)' }
+const issueLabelFor = issueType => ISSUE_OPTIONS.find(o => o.value === issueType)?.label || ISSUE_DISPLAY_LABELS[issueType] || issueType
 const todayISO = () => new Date().toISOString().split('T')[0]
 const fmtDate = iso => new Date(iso + 'T00:00:00').toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' })
 
@@ -222,7 +226,7 @@ export default function TimesheetAdjustmentPage() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                         <div>
                           <div style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>{fmtDate(r.shift_date)} · {SHIFT_LABELS[r.shift_type] || r.shift_type}</div>
-                          <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{r.cutoff_label} · {ISSUE_OPTIONS.find(o => o.value === r.issue_type)?.label || r.issue_type}</div>
+                          <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{r.cutoff_label} · {issueLabelFor(r.issue_type)}</div>
                         </div>
                         <StatusPill req={r} />
                       </div>
