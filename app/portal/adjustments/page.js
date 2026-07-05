@@ -228,6 +228,23 @@ export default function TimesheetAdjustmentPage() {
                       </div>
                       {r.reason && <div style={{ fontSize: 11, color: '#6b7280', marginTop: 8, fontStyle: 'italic' }}>"{r.reason}"</div>}
                       {r.status === 'rejected' && r.review_note && <div style={{ fontSize: 11, color: '#c0392b', marginTop: 6 }}>HR note: {r.review_note}</div>}
+                      {r.resolution === 'refund' && r.calc_hourly_rate != null && (
+                        <div style={{ marginTop: 8, background: '#f6faf3', border: '1px solid #d9ecc7', borderRadius: 10, padding: '10px 12px' }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: '#4a7a1e' }}>How this amount was worked out</div>
+                          <div style={{ fontSize: 11, color: '#4b5563', marginTop: 4 }}>
+                            You were originally paid for {r.calc_original_paid_hours}h ({r.calc_original_late_mins}m marked late) on this shift. Once corrected, it's {r.calc_corrected_paid_hours}h ({r.calc_corrected_late_mins}m late), at ₱{r.calc_hourly_rate}/hr.
+                          </div>
+                          <div style={{ fontSize: 11, color: '#4b5563', marginTop: 4 }}>
+                            Late deduction adjusted: ₱{Math.round(r.calc_recorded_late_deduction)} → ₱{Math.round(r.calc_supposed_late_deduction)} (₱{Math.round(r.calc_late_refund)} back)
+                          </div>
+                          <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2 }}>
+                            Extra hours credited: ₱{Math.round(r.calc_extra_hours_credit)}
+                          </div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: '#4a7a1e', marginTop: 6 }}>
+                            Total: ₱{Math.round(r.refund_amount).toLocaleString('en-PH')}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))
                 )}
