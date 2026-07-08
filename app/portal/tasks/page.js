@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import PortalShell from '../../../components/PortalShell'
 import { createClient } from '../../../lib/supabase'
 import { syncRecurringTasksForDate } from '../../../lib/recurringTaskSync'
+import { syncRoleTasksForDate } from '../../../lib/roleTaskSync'
 
 const toISO = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 const fmtTime = ts => ts ? new Date(ts).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}) : ''
@@ -110,6 +111,11 @@ export default function MyTasks() {
 
   async function loadData(supabase, staffId) {
     try {
+      // Auto-populate this staffer's checklist for today from their role's task template
+      // (no-op if already synced) — this is what makes the checklist show up without an
+      // admin needing to open this person's card in the Command Center first.
+      await syncRoleTasksForDate(supabase, today, staffId)
+
       // Auto-populate this staffer's weekly recurring tasks for today (no-op if already synced)
       await syncRecurringTasksForDate(supabase, today, staffId)
 
