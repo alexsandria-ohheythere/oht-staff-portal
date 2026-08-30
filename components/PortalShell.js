@@ -70,9 +70,6 @@ export default function PortalShell({ children }) {
     ] : []),
 
     { type: 'section', label: 'Inventory' },
-    { href: '/inventory/my-requests', icon: '🚩', label: 'Running Low Request' },
-    { href: '/inventory/daily',       icon: '📋', label: 'Daily Inventory' },
-    { href: '/inventory/my-reports',  icon: '📊', label: 'My Reports' },
     { href: '/portal/recipes',        icon: '📒', label: 'Recipes' },
     
     { type: 'section', label: 'Forms' },
