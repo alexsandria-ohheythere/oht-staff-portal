@@ -120,6 +120,7 @@ export default function OvertimePage() {
 
   function StatusPill({ req }) {
     if (req.status === 'declined') return <span style={pillStyle('#f3f4f6', '#6b7280')}>👍 You declined</span>
+    if (req.status === 'cancelled') return <span style={pillStyle('#f3f4f6', '#6b7280')}>🗑️ Cancelled by management</span>
     if (req.status === 'submitted') return <span style={pillStyle('#fef3e2', '#a06000')}>⏳ Awaiting approval</span>
     if (req.status === 'rejected') return <span style={pillStyle('#fdeaea', '#c0392b')}>✗ Rejected</span>
     if (req.status === 'approved') {
