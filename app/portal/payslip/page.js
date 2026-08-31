@@ -31,6 +31,10 @@ function getBaseRate(employment_type, role, overrideRates=null){
   if(!entry) return null
   if(entry.type==='monthly') return {monthly:entry.amount}
   if(entry.type==='daily')   return {daily:entry.amount}
+  if(entry.monthly!=null) return {monthly:entry.monthly}
+  if(entry.daily!=null) return {daily:entry.daily}
+  // Saved rate is missing its type tag — infer from employment type instead of paying ₱0.
+  if(entry.amount!=null) return employment_type==='Full-time' ? {monthly:entry.amount} : {daily:entry.amount}
   return entry
 }
 function getDailyRate(employment_type, role, overrideRates=null){
