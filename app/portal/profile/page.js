@@ -12,8 +12,8 @@ function getDailyRate(employment_type, role, overrideRates) {
   if (entry?.type === 'monthly' && entry.amount) return Math.round(entry.amount / 26)
   // fallback defaults
   const DEFAULTS = {
-    'Part-time':  { 'Senior Barista':850,'Executive Chef':850,'Junior Barista - Milk Station':700,'Junior Barista - Cashier':700,'Sous Chef':700,'Kitchen Staff':700 },
-    'Freelancer': { 'Cafe Supervisor':1150,'Cafe Operations Support':750,'Senior Barista':850,'Executive Chef':850,'Junior Barista - Milk Station':700,'Junior Barista - Cashier':700,'Sous Chef':700,'Kitchen Staff':700 },
+    'Part-time':  { 'Senior Barista':850,'Executive Chef':850,'Junior Barista - Milk Station':700,'Junior Barista - Cashier':700,'Sous Chef':700,'Kitchen Staff':700 },'R&D Specialist':1150 },
+    'Freelancer': { 'Cafe Supervisor':1150,'Cafe Operations Support':750,'Senior Barista':850,'Executive Chef':850,'Junior Barista - Milk Station':700,'Junior Barista - Cashier':700,'Sous Chef':700,'Kitchen Staff':700 },'R&D Specialist':1150 },
   }
   return DEFAULTS[employment_type]?.[role] || 0
 }
