@@ -11,18 +11,18 @@ const RATES = {
   'Full-time': {
     'Senior Barista':{monthly:17000},'Executive Chef':{monthly:17000},
     'Junior Barista - Milk Station':{monthly:14000},'Junior Barista - Cashier':{monthly:14000},
-    'Sous Chef':{monthly:15000},
+    'Sous Chef':{monthly:15000},'R&D Specialist':{daily:23000}
   },
   'Part-time': {
     'Senior Barista':{daily:850},'Executive Chef':{daily:850},
     'Junior Barista - Milk Station':{daily:700},'Junior Barista - Cashier':{daily:700},
-    'Sous Chef':{daily:700},'Kitchen Staff':{daily:700},
+    'Sous Chef':{daily:700},'Kitchen Staff':{daily:700},'R&D Specialist':{daily:1150}
   },
   'Freelancer': {
     'Cafe Supervisor':{daily:1150},'Cafe Operations Support':{daily:750},
     'Senior Barista':{daily:850},'Executive Chef':{daily:850},
     'Junior Barista - Milk Station':{daily:700},'Junior Barista - Cashier':{daily:700},
-    'Sous Chef':{daily:700},'Kitchen Staff':{daily:700},
+    'Sous Chef':{daily:700},'Kitchen Staff':{daily:700},'R&D Specialist':{daily:1150}
   },
 }
 function getBaseRate(employment_type, role, overrideRates=null){
