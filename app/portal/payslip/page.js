@@ -129,7 +129,8 @@ export default function MyPayslip() {
   const overtime = parseFloat(selected?.overtime)||0
   const refund = parseFloat(selected?.refund)||0
   const undertime = parseFloat(selected?.undertime)||0
-  const grossPay = selected ? (parseFloat(selected.gross)||0)+incentives+overtime+refund : 0
+  const additionalPayment = parseFloat(selected?.additional_payment)||0
+  const grossPay = selected ? (parseFloat(selected.gross)||0)+additionalPayment+incentives+overtime+refund : 0
   const govDed = selected ? (parseFloat(selected.sss)||0)+(parseFloat(selected.philhealth)||0)+(parseFloat(selected.pagibig)||0)+(parseFloat(selected.tax)||0) : 0
   const late = parseFloat(selected?.late_deduction)||0
   // Full-time: missed days already unpaid in gross — do not subtract absence again.
@@ -185,6 +186,7 @@ export default function MyPayslip() {
                 {/* Earnings */}
                 <div style={{fontSize:9,fontWeight:700,letterSpacing:1,textTransform:'uppercase',color:'var(--text-muted)',margin:'4px 0 4px'}}>Earnings</div>
                 <Row label="Basic" value={peso(selected.gross)} />
+                {additionalPayment>0&&<Row label="Additional Payment (Extra Shifts)" value={peso(additionalPayment)} />}
                 {incentives>0&&<Row label="Incentives" value={peso(incentives)} />}
                 {overtime>0&&<Row label="Overtime" value={peso(overtime)} />}
                 {refund>0&&<Row label="Refund" value={peso(refund)} />}
