@@ -18,7 +18,7 @@ import PortalShell from '../../../components/PortalShell'
 import { createClient } from '../../../lib/supabase'
 import { notifyAdmins } from '../../../lib/notify'
 
-const SHIFT_LABELS = { am: 'AM · 6:30AM–3:30PM', ops: 'OPS · 8:00AM–5:00PM', mid: 'MID · 11AM–8PM', pm: 'PM · 3PM–11PM' }
+const SHIFT_LABELS = { am: 'AM · 6:30AM–3:30PM', ops: 'OPS · 8:00AM–5:00PM', mid: 'MID · 11AM–8PM', pm: 'PM · 2PM–11PM' }
 const fmtDate = iso => new Date(iso + 'T00:00:00').toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' })
 const peso = n => '₱' + (parseFloat(n) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
