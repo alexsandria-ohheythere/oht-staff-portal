@@ -32,7 +32,7 @@ const CUTOFF_PERIODS = [
 ]
 const cutoffForDate = iso => CUTOFF_PERIODS.find(p => iso >= p.start && iso <= p.end)
 
-const SHIFT_LABELS = { am: 'AM · 6:30AM–3:30PM', ops: 'OPS · 8:00AM–5:00PM', mid: 'MID · 11AM–8PM', pm: 'PM · 3PM–11PM' }
+const SHIFT_LABELS = { am: 'AM · 6:30AM–3:30PM', ops: 'OPS · 8:00AM–5:00PM', mid: 'MID · 11AM–8PM', pm: 'PM · 2PM–11PM' }
 const ISSUE_OPTIONS = [
   { value: 'no_time_in',      label: "Couldn't clock in",        hint: 'Time-in is missing from the timesheet' },
   { value: 'no_time_out',     label: "Couldn't clock out",       hint: 'Time-out is missing from the timesheet' },
