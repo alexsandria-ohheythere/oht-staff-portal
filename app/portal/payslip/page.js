@@ -130,11 +130,21 @@ export default function MyPayslip() {
   const refund = parseFloat(selected?.refund)||0
   const undertime = parseFloat(selected?.undertime)||0
   const additionalPayment = parseFloat(selected?.additional_payment)||0
-  const grossPay = selected ? (parseFloat(selected.gross)||0)+additionalPayment+incentives+overtime+refund : 0
+  // Service Charge was missing here entirely — this page recomputed Gross/Net Pay itself instead
+  // of including payroll_runs.service_charge, so a staff member's Service Charge amount (visible
+  // and correct on the Command Center side, and in the saved net_pay column used by the Pay
+  // Periods list just left of this panel) never showed up in their own payslip detail. Fixed 2026-09-15.
+  const serviceCharge = parseFloat(selected?.service_charge)||0
+  const grossPay = selected ? (parseFloat(selected.gross)||0)+additionalPayment+incentives+overtime+refund+serviceCharge : 0
   const govDed = selected ? (parseFloat(selected.sss)||0)+(parseFloat(selected.philhealth)||0)+(parseFloat(selected.pagibig)||0)+(parseFloat(selected.tax)||0) : 0
   const late = parseFloat(selected?.late_deduction)||0
-  // Full-time: missed days already unpaid in gross — do not subtract absence again.
-  const netPay = Math.max(0, grossPay - govDed - late - undertime)
+  // NET PAY itself is read straight from the saved net_pay column rather than re-derived from the
+  // breakdown above — the Command Center now keeps net_pay canonical across every save/adjustment
+  // path (Save Payroll, refund/overtime approval, Service Charge save), and the Pay Periods list
+  // to the left already trusts that same column. Recomputing it independently here is exactly how
+  // Service Charge silently went missing from this page before, and is one omission away from
+  // happening again with the next new earnings type — trusting the column closes that off for good.
+  const netPay = Math.max(0, parseFloat(selected?.net_pay)||0)
 
   return (
     <PortalShell>
@@ -190,6 +200,7 @@ export default function MyPayslip() {
                 {incentives>0&&<Row label="Incentives" value={peso(incentives)} />}
                 {overtime>0&&<Row label="Overtime" value={peso(overtime)} />}
                 {refund>0&&<Row label="Refund" value={peso(refund)} />}
+                {serviceCharge>0&&<Row label="Service Charge" value={peso(serviceCharge)} />}
                 <Row label="Gross Pay" value={peso(grossPay)} bold />
 
                 {/* Deductions */}
